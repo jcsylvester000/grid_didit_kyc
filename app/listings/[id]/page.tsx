@@ -5,6 +5,8 @@ import { BedDouble, Bath, Ruler, MapPin, Lock, LockOpen, CalendarCheck } from "l
 import { getListing, formatPhp } from "@/lib/data";
 import { AccessBadge, ListingPhoto, Notice, OutcomeChip, OwnerBadge, VerifiedBadge, DbMissing } from "@/components/ui";
 import { listingPhotos } from "@/lib/photos";
+import { completedAtsForListing } from "@/lib/server/documents";
+import { FileCheck2 } from "lucide-react";
 import { currentUser } from "@/lib/server/session";
 import { dbConfigured } from "@/lib/server/db";
 import { findReusable, latestVerification, userBookings } from "@/lib/server/kyc";
@@ -38,6 +40,7 @@ export default async function ListingPage({ params, searchParams }: Props) {
   const loginHref = `/login?next=${encodeURIComponent(`/listings/${listing.id}`)}`;
 
   const photos = listingPhotos(listing.id);
+  const ats = await completedAtsForListing(listing.id).catch(() => null);
 
   return (
     <div className="page space-y-6">
@@ -52,7 +55,7 @@ export default async function ListingPage({ params, searchParams }: Props) {
       </div>
       <p className="text-xs text-muted -mt-3">Sample photos (Unsplash): {photos.map((p) => p.credit).join(", ")}.</p>
 
-      <div className="grid lg:grid-cols-[1.5fr_1fr] gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-8">
       <article className="space-y-6">
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -77,6 +80,12 @@ export default async function ListingPage({ params, searchParams }: Props) {
             </div>
           ))}
         </dl>
+        {ats && (
+          <p className="text-sm flex items-start gap-2 rounded-xl bg-ok-soft text-ok px-4 py-3">
+            <FileCheck2 size={18} className="shrink-0 mt-0.5" aria-hidden />
+            <span><b>Authority to Sell on file.</b> Signed by the verified owner and broker {ats.broker_name} on {new Date(ats.completed_at!).toLocaleDateString("en-PH", { dateStyle: "medium", timeZone: "Asia/Manila" })}.</span>
+          </p>
+        )}
         {listing.ownerAuthorized && (
           <p className="text-sm text-muted border-l-2 border-muesli pl-3">
             <b className="text-midnight">Owner-Authorized</b> means the owner verified their identity and their name matches the title copy they uploaded.

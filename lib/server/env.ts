@@ -5,6 +5,7 @@ export const env = {
   databaseUrl: () => process.env.DATABASE_URL ?? "",
   diditApiKey: () => process.env.DIDIT_API_KEY ?? "",
   diditWorkflowId: () => process.env.DIDIT_WORKFLOW_ID ?? "",
+  diditBiometricWorkflowId: () => process.env.DIDIT_BIOMETRIC_WORKFLOW_ID ?? "",
   diditWebhookSecret: () => process.env.DIDIT_WEBHOOK_SECRET ?? "",
   diditApiBase: () => (process.env.DIDIT_API_BASE || "https://verification.didit.me").replace(/\/+$/, ""),
   appUrl: () => (process.env.APP_URL || process.env.URL || "http://localhost:3000").replace(/\/+$/, ""),

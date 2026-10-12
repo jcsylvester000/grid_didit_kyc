@@ -24,6 +24,7 @@ export async function SiteHeader() {
           </Link>
           <nav className="hidden md:flex items-center gap-5 text-sm text-white/85" aria-label="Main">
             <Link href="/" className="hover:text-burly">Listings</Link>
+            {user && <Link href="/documents" className="hover:text-burly">Documents</Link>}
             {user && <Link href="/account" className="hover:text-burly">My account</Link>}
             <Link href="/admin" className="hover:text-burly">Admin</Link>
           </nav>
@@ -57,7 +58,8 @@ export async function SiteHeader() {
       <div className="brand-rule" />
       <nav className="md:hidden bg-white border-b border-line text-sm flex justify-around py-2" aria-label="Main mobile">
         <Link href="/">Listings</Link>
-        {user && <Link href="/account">My account</Link>}
+        {user && <Link href="/documents">Documents</Link>}
+        {user && <Link href="/account">Account</Link>}
         <Link href="/admin">Admin</Link>
       </nav>
     </header>

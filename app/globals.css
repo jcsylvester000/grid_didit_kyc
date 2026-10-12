@@ -179,3 +179,11 @@ h3 {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Print / save-as-PDF: show only the document */
+@media print {
+  body > header, body > footer, body > a, .no-print { display: none !important; }
+  body { background: #fff; }
+  .page { max-width: none; padding: 0; }
+  .ats-paper { border: 0 !important; box-shadow: none !important; padding: 0 !important; }
+}

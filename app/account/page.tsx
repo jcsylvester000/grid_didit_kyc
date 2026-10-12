@@ -44,7 +44,7 @@ export default async function AccountPage({ searchParams }: Props) {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <section className="card p-6 space-y-4" aria-labelledby="progress-h">
           <h2 id="progress-h" className="text-xl text-nile">Your progress</h2>
           {journey && <JourneyTracker journey={journey} />}
@@ -73,7 +73,7 @@ export default async function AccountPage({ searchParams }: Props) {
         {verified ? (
           <>
             <p className="text-sm text-muted">This is everything Grid keeps from your check. Your ID photo and selfie stay with Didit and are deleted after the retention period.</p>
-            <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
               <div><dt className="text-muted">Verified name</dt><dd className="font-medium">{verified.verified_name ?? (verified.reviewed_by ? "Confirmed by staff review" : "—")}</dd></div>
               <div><dt className="text-muted">Date of birth</dt><dd className="font-medium">{verified.date_of_birth ?? "—"}</dd></div>
               <div><dt className="text-muted">ID type</dt><dd className="font-medium">{verified.document_type ?? idTypeLabel(verified.id_type_chosen)}</dd></div>

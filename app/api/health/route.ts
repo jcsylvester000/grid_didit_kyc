@@ -18,6 +18,7 @@ export async function GET() {
     db,
     didit: isMockMode() ? "mock" : "live",
     workflowConfigured: Boolean(env.diditWorkflowId()),
+    biometricWorkflowConfigured: Boolean(env.diditBiometricWorkflowId()),
     webhookSecretConfigured: Boolean(env.diditWebhookSecret()),
   });
 }

@@ -97,3 +97,69 @@ export async function getDiditDecision(sessionId: string): Promise<DiditDecision
 }
 
 export { isMockMode };
+
+/* ---------------------------------------------------------------- Biometric Authentication (signing re-check) */
+
+// docs.didit.me/core-technology/biometric-auth/overview (checked 2026-10-12): session-only, workflow_type
+// BIOMETRIC_AUTHENTICATION. Same vendor_data as the user's KYC so Didit reuses the stored face. US$0.10, always paid.
+// Fails with 400 if Didit has no face for this vendor_data (e.g. accounts verified with sample data).
+export async function createBiometricSession(input: { vendorData: string; callback: string; metadata: Record<string, unknown> }): Promise<CreatedSession> {
+  const workflowId = env.diditBiometricWorkflowId();
+  if (!workflowId) throw new DiditConfigError("DIDIT_BIOMETRIC_WORKFLOW_ID is not set");
+  const res = await call("/v3/session/", {
+    method: "POST",
+    body: JSON.stringify({ workflow_id: workflowId, vendor_data: input.vendorData, callback: input.callback, metadata: input.metadata, language: "en" }),
+  });
+  if (!res.ok) await failFrom(res, "Create biometric session");
+  const j = (await res.json()) as { session_id: string; session_number?: number; url: string; status?: string; workflow_id?: string };
+  return { sessionId: j.session_id, sessionNumber: j.session_number ?? null, url: j.url, status: j.status ?? "Not Started", workflowId: j.workflow_id ?? workflowId };
+}
+
+/* ---------------------------------------------------------------- Document AI (title copy check) */
+
+// docs.didit.me/standalone-apis/document-ai (checked 2026-10-12): POST /v3/document-ai/ multipart.
+// Extracts the fields we define, fuzzy-matches the name, runs PDF/EXIF tamper checks. US$0.20, no free tier;
+// sandbox keys return mock responses. It does NOT confirm the title with the Registry of Deeds.
+export type DocumentAiResult = {
+  status: "Approved" | "Declined" | "In Review";
+  extracted: Record<string, string | number | null>;
+  nameOnDocument: string | null;
+  nameMatchScore: number | null;
+  warnings: { risk?: string; short_description?: string; log_type?: string }[];
+  requestId: string | null;
+};
+
+export async function runDocumentAi(input: {
+  file: File;
+  fields: { key: string; name: string; instruction: string; type: "text" | "number" | "date"; required: boolean; is_full_name?: boolean }[];
+  expectedFirstName: string;
+  expectedLastName: string;
+  vendorData: string;
+}): Promise<DocumentAiResult> {
+  const form = new FormData();
+  form.append("document", input.file, input.file.name || "title-copy");
+  form.append("fields", JSON.stringify(input.fields));
+  form.append("expected_first_name", input.expectedFirstName);
+  form.append("expected_last_name", input.expectedLastName);
+  form.append("vendor_data", input.vendorData);
+  let res: Response;
+  try {
+    res = await fetch(env.diditApiBase() + "/v3/document-ai/", {
+      method: "POST",
+      headers: { "x-api-key": env.diditApiKey(), accept: "application/json" },
+      body: form,
+      signal: AbortSignal.timeout(45_000),
+      cache: "no-store",
+    });
+  } catch (e) {
+    throw new DiditUnavailableError("network", `Didit unreachable: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  if (!res.ok) await failFrom(res, "Document AI");
+  const j = (await res.json()) as {
+    request_id?: string;
+    document_ai?: { status?: string; extracted_data?: Record<string, string | number | null>; name_on_document?: string | null; name_match_score?: number | null; warnings?: DocumentAiResult["warnings"] };
+  };
+  const d = j.document_ai ?? {};
+  const status = d.status === "Approved" || d.status === "Declined" ? d.status : "In Review";
+  return { status, extracted: d.extracted_data ?? {}, nameOnDocument: d.name_on_document ?? null, nameMatchScore: d.name_match_score ?? null, warnings: d.warnings ?? [], requestId: j.request_id ?? null };
+}

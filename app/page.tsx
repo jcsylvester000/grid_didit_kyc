@@ -130,7 +130,7 @@ export default async function Home({ searchParams }: Props) {
           </div>
         </div>
         {listings.length === 0 && <p className="text-muted">No homes match these filters.</p>}
-        <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {listings.map((l, i) => (
             <li key={l.id}>
               <Link href={`/listings/${l.id}`} className="group card block overflow-hidden hover:-translate-y-0.5 hover:shadow-xl transition-all">

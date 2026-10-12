@@ -85,4 +85,59 @@ export const SCHEMA_STATEMENTS: string[] = [
      value jsonb NOT NULL,
      updated_at timestamptz NOT NULL DEFAULT now()
    )`,
+  // v0.4 document transactions (Authority to Sell). Grid's own workflow: Didit verifies the people and checks
+  // the uploaded title copy; Grid builds the document, captures signatures, seals it (SHA-256) and keeps the trail.
+  `CREATE TABLE IF NOT EXISTS kyc_documents (
+     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+     doc_type text NOT NULL DEFAULT 'ats',
+     template_version text NOT NULL,
+     status text NOT NULL,
+     listing_id text NOT NULL,
+     broker_id text NOT NULL REFERENCES kyc_users(id) ON DELETE CASCADE,
+     owner_id text NOT NULL REFERENCES kyc_users(id) ON DELETE CASCADE,
+     terms jsonb NOT NULL,
+     parties jsonb NOT NULL DEFAULT '{}'::jsonb,
+     title_check jsonb,
+     content_hash text,
+     final_hash text,
+     created_at timestamptz NOT NULL DEFAULT now(),
+     updated_at timestamptz NOT NULL DEFAULT now(),
+     sent_at timestamptz,
+     completed_at timestamptz
+   )`,
+  `CREATE INDEX IF NOT EXISTS kyc_documents_broker_idx ON kyc_documents (broker_id, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS kyc_documents_owner_idx ON kyc_documents (owner_id, created_at DESC)`,
+  `CREATE TABLE IF NOT EXISTS kyc_face_checks (
+     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+     user_id text NOT NULL REFERENCES kyc_users(id) ON DELETE CASCADE,
+     document_id uuid NOT NULL REFERENCES kyc_documents(id) ON DELETE CASCADE,
+     mode text NOT NULL,
+     didit_session_id text UNIQUE,
+     didit_session_number bigint,
+     status text NOT NULL,
+     created_at timestamptz NOT NULL DEFAULT now(),
+     decided_at timestamptz
+   )`,
+  `CREATE TABLE IF NOT EXISTS kyc_document_signatures (
+     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+     document_id uuid NOT NULL REFERENCES kyc_documents(id) ON DELETE CASCADE,
+     user_id text NOT NULL REFERENCES kyc_users(id) ON DELETE CASCADE,
+     role text NOT NULL,
+     signature_svg text NOT NULL,
+     face_check_id uuid REFERENCES kyc_face_checks(id) ON DELETE SET NULL,
+     signed_hash text NOT NULL,
+     consent_text text NOT NULL,
+     user_agent text,
+     signed_at timestamptz NOT NULL DEFAULT now(),
+     UNIQUE (document_id, role)
+   )`,
+  `CREATE TABLE IF NOT EXISTS kyc_document_events (
+     id bigserial PRIMARY KEY,
+     document_id uuid NOT NULL REFERENCES kyc_documents(id) ON DELETE CASCADE,
+     at timestamptz NOT NULL DEFAULT now(),
+     actor_id text,
+     action text NOT NULL,
+     detail jsonb NOT NULL DEFAULT '{}'::jsonb
+   )`,
+  `CREATE INDEX IF NOT EXISTS kyc_document_events_doc_idx ON kyc_document_events (document_id, at)`,
 ];

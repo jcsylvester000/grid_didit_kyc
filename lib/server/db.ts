@@ -2,7 +2,7 @@ import "server-only";
 import { neon, neonConfig, type NeonQueryFunction } from "@neondatabase/serverless";
 import { env } from "./env";
 import { SCHEMA_STATEMENTS } from "./schema";
-import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/data";
+import { DEMO_ACCOUNTS, DEMO_PASSWORD, DEMO_VERIFIED } from "@/lib/data";
 
 let client: NeonQueryFunction<false, false> | null = null;
 let ready: Promise<void> | null = null;
@@ -33,18 +33,20 @@ async function migrate() {
   await seedReturningTenant();
 }
 
-/** Paolo is the "returning tenant": seed one passed verification so reuse can be demoed. */
+/** Seed passed checks (sample data) for Paolo (reuse demo), Ramon (owner) and Liza (broker). */
 export async function seedReturningTenant() {
   const sql = getClient();
-  await sql.query(
-    `INSERT INTO kyc_verifications
-       (user_id, trigger_action, listing_id, id_type_chosen, mode, didit_status, outcome,
-        verified_name, date_of_birth, document_type, document_expiry, issuing_state, decided_at, created_at)
-     SELECT 'demo-tenant-paolo', 'book_viewing', 'rockwell-2br', 'passport', 'seed', 'Approved', 'verified',
-            'PAOLO REYES', '1991-04-12', 'Passport', (now() + interval '3 years')::date, 'PHL',
-            now() - interval '30 days', now() - interval '30 days'
-     WHERE NOT EXISTS (SELECT 1 FROM kyc_verifications WHERE user_id = 'demo-tenant-paolo')`,
-  );
+  for (const d of DEMO_VERIFIED) {
+    await sql.query(
+      `INSERT INTO kyc_verifications
+         (user_id, trigger_action, id_type_chosen, mode, didit_status, outcome,
+          verified_name, date_of_birth, document_type, document_expiry, issuing_state, decided_at, created_at)
+       SELECT $1, 'seed', $2, 'seed', 'Approved', 'verified', $3, $4::date, $5, (now() + interval '3 years')::date, 'PHL',
+              now() - interval '30 days', now() - interval '30 days'
+       WHERE NOT EXISTS (SELECT 1 FROM kyc_verifications WHERE user_id = $1)`,
+      [d.userId, d.idType, d.name, d.dob, d.docType],
+    );
+  }
 }
 
 /** Run a parameterised query. Schema is created once per server instance. */

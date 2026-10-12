@@ -360,6 +360,7 @@ export async function deleteRegisteredAccounts() {
 }
 
 export async function resetDemoData() {
+  await q(`DELETE FROM kyc_documents`);
   await q(`DELETE FROM kyc_bookings`);
   await q(`DELETE FROM kyc_verifications`);
   await q(`DELETE FROM kyc_consents`);

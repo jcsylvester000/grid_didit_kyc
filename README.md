@@ -12,6 +12,29 @@ override with `APP_ACCESS_CODE`). Access lasts 12 hours per browser; the lock ic
 The check runs in `proxy.ts` before any page renders, so nothing is shown or sent until the code is entered.
 The Didit webhook and `/api/health` stay open.
 
+## Document transactions: Authority to Sell (v0.4)
+
+Didit has **no e-signature product**. Split of responsibilities:
+
+| Step | Who |
+|---|---|
+| Signer is a verified person | Didit (KYC, already on file) |
+| Person signing now = that person | Didit **Biometric Authentication** (`DIDIT_BIOMETRIC_WORKFLOW_ID`), US$0.10 |
+| Title copy in owner's name, unedited | Didit **Document AI**, US$0.20 (no Registry of Deeds check) |
+| ATS text, routing, consent to e-sign, drawn signature, SHA-256 seal, audit trail | Grid |
+| Notarization / title authenticity | Third party (notary or accredited e-notary; Registry of Deeds CTC) |
+
+Flow (`/documents`): broker drafts (prefilled from verified data) → sends (content locked, SHA-256) → owner uploads
+title copy (Document AI) → owner face check + drawn signature → broker face check + countersignature → completed
+(completion seal, audit trail, print/PDF). The listing then shows "Authority to Sell on file".
+
+- Demo: `liza@example.com` (verified PRC broker) and `ramon@example.com` (verified OFW owner), password `GridDemo2026`.
+- **Live vs simulated:** the face check runs live only for accounts Didit really verified (it needs the stored face;
+  demo accounts were seeded, so theirs is simulated). Document AI runs live whenever `DIDIT_API_KEY` is set
+  (sandbox keys return sample results; the file is sent to Didit, never stored by Grid).
+- To try the live face check: register your own account as **Property owner**, verify with Didit, then sign in as Liza
+  and draft an ATS using your email as the owner.
+
 ## Accounts and listing access (v0.3)
 
 - **Register** (`/register`): name, email, optional PH mobile, password. **No ID at sign-up.**

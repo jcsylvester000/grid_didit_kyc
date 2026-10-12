@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { getListing, idTypeLabel, isDemoAccount, PRICING } from "@/lib/data";
 import { listUsers } from "@/lib/server/auth";
+import { allDocuments } from "@/lib/server/documents";
+import { STATUS_LABEL } from "@/components/DiditGridLegend";
+import Link from "next/link";
 import { isAdmin } from "@/lib/server/session";
 import { dbConfigured } from "@/lib/server/db";
 import { env, isMockMode } from "@/lib/server/env";
@@ -49,7 +52,7 @@ export default async function AdminPage({ searchParams }: Props) {
   }
   if (!dbConfigured()) return <DbMissing />;
 
-  const [s, users] = await Promise.all([adminSnapshot(), listUsers()]);
+  const [s, users, docs] = await Promise.all([adminSnapshot(), listUsers(), allDocuments()]);
   const names = new Map(users.map((u) => [u.id, u.name]));
   const who = (id: string | null) => (id ? names.get(id) ?? "Deleted account" : "—");
   const mock = isMockMode();
@@ -78,7 +81,7 @@ export default async function AdminPage({ searchParams }: Props) {
       {sp.accounts && <Notice tone="ok">Registered test accounts deleted. Demo accounts were kept.</Notice>}
 
       {/* Configuration */}
-      <section className="grid md:grid-cols-3 gap-4">
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="card p-5 space-y-2 text-sm">
           <h2 className="text-lg text-nile">Didit connection</h2>
           <p className="flex items-center gap-2">
@@ -86,6 +89,7 @@ export default async function AdminPage({ searchParams }: Props) {
             {mock ? "Mock mode (no API key)" : "Live API key set"}
           </p>
           <p className="text-muted">Workflow ID: {env.diditWorkflowId() ? "set" : "missing"}</p>
+          <p className="text-muted">Biometric workflow (signing): {env.diditBiometricWorkflowId() ? "set" : "missing"}</p>
           <p className="text-muted">Webhook secret: {env.diditWebhookSecret() ? "set" : "missing"}</p>
           <p className="text-muted break-all">Webhook URL for Didit console: <code>{env.appUrl()}/api/didit/webhook</code></p>
         </div>
@@ -116,7 +120,7 @@ export default async function AdminPage({ searchParams }: Props) {
         {used >= PRICING.alertAt && (
           <Notice tone="wait">{used} of {PRICING.freePerFeature} free checks used. Paid usage starts at {PRICING.freePerFeature + 1}. Confirm auto top-up and backup card.</Notice>
         )}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {PRICING.features.map((f) => (
             <div key={f.key} className="space-y-1.5">
               <div className="flex justify-between text-sm"><span>{f.label}</span><span className="tabular-nums text-muted">{used} / {PRICING.freePerFeature}</span></div>
@@ -221,6 +225,30 @@ export default async function AdminPage({ searchParams }: Props) {
                   <td className="tabular-nums">{u.bookings}</td>
                   <td className="whitespace-nowrap">{fmt(u.created_at)}</td>
                   <td className="whitespace-nowrap">{fmt(u.last_login_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Documents */}
+      <section className="space-y-3" aria-labelledby="docs-h">
+        <h2 id="docs-h" className="text-xl text-nile">Document transactions ({docs.length})</h2>
+        <div className="card overflow-x-auto">
+          <table className="table-tight w-full">
+            <thead><tr><th>Updated</th><th>Document</th><th>Property</th><th>Owner</th><th>Broker</th><th>Status</th><th>Title check</th></tr></thead>
+            <tbody>
+              {docs.length === 0 && <tr><td colSpan={7} className="text-muted">No documents yet.</td></tr>}
+              {docs.map((d) => (
+                <tr key={d.id}>
+                  <td className="whitespace-nowrap">{fmt(d.updated_at)}</td>
+                  <td><Link className="underline" href={`/documents/${d.id}`}>ATS {d.id.slice(0, 8).toUpperCase()}</Link></td>
+                  <td>{getListing(d.listing_id)?.title ?? d.listing_id}</td>
+                  <td>{d.owner_name}</td>
+                  <td>{d.broker_name}</td>
+                  <td><span className={`rounded-full text-xs px-2 py-0.5 ${STATUS_LABEL[d.status].cls}`}>{STATUS_LABEL[d.status].label}</span></td>
+                  <td>{d.title_check ? `${d.title_check.status}${d.title_check.mode === "simulated" ? " (sim)" : ""}` : "—"}</td>
                 </tr>
               ))}
             </tbody>

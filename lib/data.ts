@@ -126,7 +126,19 @@ export const DEMO_ACCOUNTS: { id: string; name: string; email: string; role: Rol
   { id: "demo-tenant-maria", name: "Maria Santos", email: "maria@example.com", role: "tenant", note: "New tenant, not verified" },
   { id: "demo-tenant-paolo", name: "Paolo Reyes", email: "paolo@example.com", role: "tenant", note: "Returning tenant, already verified" },
   { id: "demo-tenant-ana", name: "Ana Cruz", email: "ana@example.com", role: "tenant", note: "OFW tenant, uses passport" },
+  { id: "demo-owner-ramon", name: "Ramon Dela Cruz", email: "ramon@example.com", role: "owner", note: "Condo owner (OFW, Dubai), verified" },
+  { id: "demo-broker-liza", name: "Liza Manalo", email: "liza@example.com", role: "broker", note: "PRC-licensed broker, verified" },
 ];
+
+/** Seeded passed checks so the document showcase can start from verified people (sample data, mode "seed"). */
+export const DEMO_VERIFIED: { userId: string; name: string; dob: string; docType: string; idType: string }[] = [
+  { userId: "demo-tenant-paolo", name: "PAOLO REYES", dob: "1991-04-12", docType: "Passport", idType: "passport" },
+  { userId: "demo-owner-ramon", name: "RAMON DELA CRUZ", dob: "1979-11-03", docType: "Passport", idType: "passport" },
+  { userId: "demo-broker-liza", name: "LIZA MANALO", dob: "1986-02-17", docType: "PRC ID", idType: "prc" },
+];
+
+/** Sample PRC broker registrations (invented). Production: confirm on the PRC online verification service. */
+export const BROKER_PRC: Record<string, string> = { "demo-broker-liza": "REB 0045821 (sample)" };
 export const DEMO_PASSWORD = "GridDemo2026";
 export const isDemoAccount = (id: string) => DEMO_ACCOUNTS.some((u) => u.id === id);
 
@@ -160,3 +172,18 @@ export const PRICING = {
 } as const;
 
 export const formatPhp = (n: number) => "₱" + n.toLocaleString("en-PH");
+
+/* ---------------------------------------------------------------- Authority to Sell (ATS) */
+
+export const ATS_TEMPLATE_VERSION = "ATS-2026-10.v1";
+/** Suggested asking prices for the sample listings (invented). */
+export const ATS_SUGGESTED_PRICE: Record<string, number> = {
+  "bgc-uptown-1br": 12_500_000,
+  "rockwell-2br": 28_000_000,
+  "ortigas-studio": 4_200_000,
+  "alabang-house": 65_000_000,
+  "cebu-itpark-1br": 5_600_000,
+  "qc-maginhawa-2br": 9_800_000,
+};
+/** AMLA covered-transaction threshold for real estate (single cash transaction above ₱7.5M) — Readiness Report §5.2. */
+export const AML_THRESHOLD_PHP = 7_500_000;

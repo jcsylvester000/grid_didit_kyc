@@ -89,7 +89,7 @@ export function ConsentFlow({ listingId, listingTitle, resumeId }: { listingId: 
             <h1 id="id-h" className="text-3xl text-nile mt-1">Choose your ID</h1>
             <p className="mt-2 text-muted">Make sure it is valid and not expired.</p>
           </div>
-          <div className="grid sm:grid-cols-2 gap-3" role="radiogroup" aria-labelledby="id-h">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" role="radiogroup" aria-labelledby="id-h">
             {ID_TYPES.map((t) => (
               <button
                 key={t.value}

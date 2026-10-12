@@ -72,6 +72,17 @@ export function RegisterForm({ next }: { next: string }) {
         <label htmlFor="phone" className="text-sm font-medium">Mobile number <span className="text-muted font-normal">(optional, for viewing reminders)</span></label>
         <input id="phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="0917 123 4567" defaultValue={state.fields?.phone} className="input" />
       </div>
+      <fieldset className="space-y-1.5">
+        <legend className="text-sm font-medium">I am a</legend>
+        <div className="grid grid-cols-3 gap-2">
+          {[["tenant", "Tenant / buyer"], ["owner", "Property owner"], ["broker", "Broker / agent"]].map(([v, l]) => (
+            <label key={v} className="flex items-center justify-center text-center rounded-xl border border-iron px-2 py-2.5 text-sm cursor-pointer has-[:checked]:border-nile has-[:checked]:bg-nile-soft">
+              <input type="radio" name="role" value={v} defaultChecked={v === "tenant"} className="sr-only" />
+              {l}
+            </label>
+          ))}
+        </div>
+      </fieldset>
       <PasswordField autoComplete="new-password" hint="At least 8 characters." />
       <label className="flex items-start gap-3 text-sm">
         <input type="checkbox" name="terms" className="mt-1 size-4 accent-[#1c335e]" required />

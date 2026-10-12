@@ -76,7 +76,9 @@ export async function registerAction(_prev: AuthState, form: FormData): Promise<
   if (password.length < 8) return { error: "Password must be at least 8 characters.", fields };
   if (form.get("terms") !== "on") return { error: "Please agree to the Terms and Privacy Notice.", fields };
 
-  const user = await createUser({ name, email, phone, password, role: "tenant" });
+  const roleRaw = str(form, "role");
+  const role = roleRaw === "owner" || roleRaw === "broker" ? roleRaw : "tenant";
+  const user = await createUser({ name, email, phone, password, role });
   if (!user) return { error: "An account with this email already exists. Sign in instead.", fields };
   await setCurrentUser(user.id);
   await audit(`user:${user.id}`, "user.registered", { userId: user.id }); // no email/phone in the audit log

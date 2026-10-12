@@ -5,6 +5,7 @@ import { audit } from "@/lib/server/audit";
 import { verifyDiditWebhook } from "@/lib/server/webhook-signature";
 import { getDiditDecision, type DiditDecision } from "@/lib/server/didit";
 import { applyDecision, getVerificationBySession } from "@/lib/server/kyc";
+import { applyFaceDecision, getFaceCheckBySession } from "@/lib/server/documents";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,6 +45,17 @@ export async function POST(req: Request) {
   if (!sessionId) return NextResponse.json({ ok: true, ignored: "no session_id" });
   const v = await getVerificationBySession(sessionId);
   if (!v) {
+    // Biometric re-check at document signing (separate Didit workflow).
+    const fc = await getFaceCheckBySession(sessionId);
+    if (fc) {
+      let fd: DiditDecision | null = p.decision ? { ...p.decision, status: p.status ?? p.decision.status } : null;
+      if (!fd && p.status) {
+        try { fd = await getDiditDecision(sessionId); } catch { fd = { status: p.status }; }
+      }
+      if (fd) await applyFaceDecision(fc, fd, "webhook");
+      await q(`UPDATE kyc_webhook_events SET processed = true WHERE event_id = $1`, [eventId]);
+      return NextResponse.json({ ok: true, kind: "face_check" });
+    }
     await audit("didit:webhook", "webhook.unknown_session", { detail: { eventId, status: p.status } });
     return NextResponse.json({ ok: true, ignored: "unknown session" });
   }
