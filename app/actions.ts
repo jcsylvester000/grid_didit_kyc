@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getDemoUser, getListing, isIdType } from "@/lib/data";
 import { audit } from "@/lib/server/audit";
-import { checkAdminCode, currentUser, isAdmin, setAdmin, setCurrentUser } from "@/lib/server/session";
+import { checkAccessCode, checkAdminCode, currentUser, grantAccess, hasAccess, isAdmin, revokeAccess, setAdmin, setCurrentUser } from "@/lib/server/session";
 import {
   applyDecision,
   bookViewing,
@@ -24,16 +24,45 @@ import {
 
 const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
 
+/** Every action except unlocking requires the internal access code. */
+async function requireAccess() {
+  if (!(await hasAccess())) redirect("/");
+}
+
+/* ---------------------------------------------------------------- access gate */
+
+export type UnlockState = { error: string | null; ok?: boolean };
+
+export async function unlockAction(_prev: UnlockState, form: FormData): Promise<UnlockState> {
+  // Slow down guessing a little; a 6-digit code is a convenience lock, not real authentication.
+  await new Promise((r) => setTimeout(r, 400));
+  if (!checkAccessCode(str(form, "code"))) {
+    await audit("visitor", "access.denied");
+    return { error: "That code didn't work. Check it and try again." };
+  }
+  await grantAccess();
+  await audit("visitor", "access.granted");
+  // The client reloads the page itself: the root layout switches from the gate to the full app.
+  return { error: null, ok: true };
+}
+
+export async function lockAction() {
+  await revokeAccess();
+  redirect("/");
+}
+
 /** Only allow same-site relative paths as redirect targets. */
 const safeNext = (p: string) => (p.startsWith("/") && !p.startsWith("//") ? p : "/");
 
 export async function switchUserAction(form: FormData) {
+  await requireAccess();
   const id = str(form, "userId");
   if (getDemoUser(id)) await setCurrentUser(id);
   redirect(safeNext(str(form, "next")));
 }
 
 export async function startVerificationAction(form: FormData) {
+  await requireAccess();
   const user = await currentUser();
   const listingId = getListing(str(form, "listingId"))?.id ?? null;
   const idType = str(form, "idType");
@@ -50,6 +79,7 @@ export async function startVerificationAction(form: FormData) {
 }
 
 export async function bookViewingAction(form: FormData) {
+  await requireAccess();
   const user = await currentUser();
   const listing = getListing(str(form, "listingId"));
   const slot = str(form, "slot");
@@ -59,6 +89,7 @@ export async function bookViewingAction(form: FormData) {
 }
 
 export async function requestErasureAction() {
+  await requireAccess();
   const user = await currentUser();
   // Prototype: log the request for the DPO. Production: delete Grid rows + call Didit "privacy erasure".
   await audit(`user:${user.id}`, "privacy.erasure_requested", { userId: user.id });
@@ -68,6 +99,7 @@ export async function requestErasureAction() {
 /* ---------------------------------------------------------------- mock Didit screen */
 
 export async function mockCompleteAction(form: FormData) {
+  await requireAccess();
   const sessionId = str(form, "sessionId");
   const scenario = str(form, "scenario") as MockScenario;
   const v = sessionId.startsWith("mock_") ? await getVerificationBySession(sessionId) : null;
@@ -85,6 +117,7 @@ async function requireAdmin() {
 }
 
 export async function adminLoginAction(form: FormData) {
+  await requireAccess();
   if (checkAdminCode(str(form, "code"))) {
     await setAdmin(true);
     await audit("admin", "admin.login");
@@ -94,11 +127,13 @@ export async function adminLoginAction(form: FormData) {
 }
 
 export async function adminLogoutAction() {
+  await requireAccess();
   await setAdmin(false);
   redirect("/admin");
 }
 
 export async function adminDecideAction(form: FormData) {
+  await requireAccess();
   await requireAdmin();
   const id = str(form, "id");
   const action = str(form, "action") as ReviewAction;
@@ -111,6 +146,7 @@ export async function adminDecideAction(form: FormData) {
 }
 
 export async function adminToggleOutageAction(form: FormData) {
+  await requireAccess();
   await requireAdmin();
   const on = form.get("on") === "1";
   await setSetting("simulate_outage", on);
@@ -120,6 +156,7 @@ export async function adminToggleOutageAction(form: FormData) {
 }
 
 export async function adminResetDemoAction() {
+  await requireAccess();
   await requireAdmin();
   await resetDemoData();
   revalidatePath("/admin");

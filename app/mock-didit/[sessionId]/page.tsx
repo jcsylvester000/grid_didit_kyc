@@ -20,7 +20,7 @@ export default async function MockDidit({ params }: Props) {
   if (v.outcome !== "in_progress") redirect(`/verify/result?v=${v.id}`);
 
   return (
-    <div className="max-w-md mx-auto">
+    <div className="page max-w-md">
       <div className="rounded-[28px] bg-midnight text-white p-6 shadow-2xl space-y-6">
         <div className="flex items-center justify-between text-xs text-white/60">
           <span>verify.didit.me (simulated)</span>

@@ -5,7 +5,14 @@ Tenants browse freely; the one-time ID + selfie check runs only when they book t
 
 **Stack:** Next.js 16 (App Router) · React 19 · TypeScript · Tailwind v4 · Neon Postgres · Netlify
 
-## What it does (v0.1)
+## Access
+
+This is an internal app. Every page opens behind an **access-code screen** (default code `412099`,
+override with `APP_ACCESS_CODE`). Access lasts 12 hours per browser; the lock icon in the header locks it again.
+The check runs in `proxy.ts` before any page renders, so nothing is shown or sent until the code is entered.
+The Didit webhook and `/api/health` stay open.
+
+## What it does (v0.2)
 
 | Journey | Where |
 |---|---|
@@ -55,7 +62,8 @@ Admin: http://localhost:3000/admin (local default code `grid-admin-dev` when `AD
 | `DIDIT_WEBHOOK_SECRET` | Webhook "secret shared key" from the Didit console |
 | `DIDIT_API_BASE` | Optional, default `https://verification.didit.me` |
 | `APP_URL` | Public site URL, no trailing slash (Didit redirects back here) |
-| `ADMIN_ACCESS_CODE` | Code for `/admin` (required in production) |
+| `APP_ACCESS_CODE` | Optional. Access code for the whole app (default `412099`) |
+| `ADMIN_ACCESS_CODE` | Code for `/admin` staff console (required in production) |
 | `SESSION_SECRET` | Long random string; signs cookies (required in production) |
 
 ## Didit console setup
@@ -77,7 +85,13 @@ Note: Didit allows 10 session creations per minute on free workflows. Over the l
 2. Add the environment variables above (Site configuration → Environment variables).
 3. Deploy, then set `APP_URL` to the live URL and redeploy. Add the webhook URL in the Didit console.
 
-## Not in v0.1 (next)
+## Photos
+
+Listing and page photos are samples from [Unsplash](https://unsplash.com) (free under the Unsplash License),
+listed with credits in `lib/photos.ts`. They're resized and converted to AVIF/WebP by Unsplash's CDN through
+`lib/image-loader.ts`, so no Netlify image processing is used. Real listings must use the owner's own photos.
+
+## Not in this version (next)
 Face re-check at signing (Biometric Authentication), lease application + proof of address, OFW owner
 authorization + title name match, broker PRC check, AML screening for high-value deals, real login,
 SMS/email notifications, automatic retry of pending checks.

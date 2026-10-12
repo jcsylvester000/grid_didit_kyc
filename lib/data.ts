@@ -12,7 +12,7 @@ export type Listing = {
   rentPhp: number; // monthly rent, whole pesos
   owner: string;
   ownerAuthorized: boolean;
-  tint: string; // card art colour
+  city: "Metro Manila" | "Cebu";
   slots: string[];
 };
 
@@ -29,7 +29,7 @@ export const LISTINGS: Listing[] = [
     rentPhp: 45000,
     owner: "Owner (OFW, Dubai)",
     ownerAuthorized: true,
-    tint: "#1c335e",
+    city: "Metro Manila",
     slots: ["Sat 17 Oct · 10:00 AM", "Sat 17 Oct · 2:00 PM", "Sun 18 Oct · 11:00 AM"],
   },
   {
@@ -44,7 +44,7 @@ export const LISTINGS: Listing[] = [
     rentPhp: 95000,
     owner: "Private owner",
     ownerAuthorized: true,
-    tint: "#141545",
+    city: "Metro Manila",
     slots: ["Fri 16 Oct · 6:00 PM", "Sat 17 Oct · 9:00 AM"],
   },
   {
@@ -59,7 +59,7 @@ export const LISTINGS: Listing[] = [
     rentPhp: 18000,
     owner: "Broker-managed",
     ownerAuthorized: false,
-    tint: "#0e192f",
+    city: "Metro Manila",
     slots: ["Thu 15 Oct · 7:00 PM", "Sat 17 Oct · 1:00 PM", "Sun 18 Oct · 3:00 PM"],
   },
   {
@@ -74,7 +74,7 @@ export const LISTINGS: Listing[] = [
     rentPhp: 150000,
     owner: "Private owner",
     ownerAuthorized: true,
-    tint: "#8c5a3a",
+    city: "Metro Manila",
     slots: ["Sat 17 Oct · 11:00 AM", "Sun 18 Oct · 10:00 AM"],
   },
   {
@@ -89,7 +89,7 @@ export const LISTINGS: Listing[] = [
     rentPhp: 22000,
     owner: "Owner (OFW, Singapore)",
     ownerAuthorized: true,
-    tint: "#1c335e",
+    city: "Cebu",
     slots: ["Sat 17 Oct · 3:00 PM", "Mon 19 Oct · 6:30 PM"],
   },
   {
@@ -104,7 +104,7 @@ export const LISTINGS: Listing[] = [
     rentPhp: 38000,
     owner: "Broker-managed",
     ownerAuthorized: false,
-    tint: "#141545",
+    city: "Metro Manila",
     slots: ["Sun 18 Oct · 9:00 AM", "Sun 18 Oct · 4:00 PM"],
   },
 ];

@@ -15,6 +15,7 @@
 #   DIDIT_WORKFLOW_ID     Didit workflow UUID (ID + liveness + face match + IP)
 #   DIDIT_WEBHOOK_SECRET  Didit webhook "secret shared key"
 #   APP_URL               Site URL, no trailing slash (e.g. https://grid-verified.netlify.app)
+#   APP_ACCESS_CODE       Optional; whole-app access code (default 412099)
 #   ADMIN_ACCESS_CODE     Code for /admin
 #   SESSION_SECRET        Long random string (signs cookies)
 

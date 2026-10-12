@@ -4,7 +4,8 @@ import { getListing, idTypeLabel } from "@/lib/data";
 import { currentUser } from "@/lib/server/session";
 import { dbConfigured, q } from "@/lib/server/db";
 import { findReusable, userBookings, userVerifications } from "@/lib/server/kyc";
-import { DbMissing, Notice, OutcomeChip, VerifiedBadge } from "@/components/ui";
+import { DbMissing, ListingPhoto, Notice, OutcomeChip, VerifiedBadge } from "@/components/ui";
+import { listingPhotos } from "@/lib/photos";
 import { requestErasureAction } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
@@ -28,10 +29,15 @@ export default async function AccountPage({ searchParams }: Props) {
   ]);
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      <div>
-        <p className="eyebrow">My verification</p>
-        <h1 className="text-3xl text-nile">{user.name}</h1>
+    <div className="page space-y-6 max-w-4xl">
+      <div className="flex items-center gap-4">
+        <span className="grid place-items-center size-16 rounded-full bg-nile text-white font-display text-2xl" aria-hidden>
+          {user.name.split(" ").map((w) => w[0]).join("")}
+        </span>
+        <div>
+          <p className="eyebrow">My verification</p>
+          <h1 className="text-3xl text-nile">{user.name}</h1>
+        </div>
       </div>
       {sp.erasure && <Notice tone="ok">Deletion request sent to our Data Protection Officer. We&apos;ll erase your data from Grid and Didit and confirm by email.</Notice>}
 
@@ -66,8 +72,9 @@ export default async function AccountPage({ searchParams }: Props) {
         ) : (
           <ul className="text-sm divide-y divide-line">
             {bookings.map((b) => (
-              <li key={b.id} className="py-2 flex justify-between gap-4">
-                <span>{getListing(b.listing_id)?.title ?? b.listing_id}</span>
+              <li key={b.id} className="py-3 flex items-center gap-4">
+                <ListingPhoto photo={listingPhotos(b.listing_id)[0]} sizes="64px" className="size-12 rounded-lg shrink-0" />
+                <span className="flex-1">{getListing(b.listing_id)?.title ?? b.listing_id}</span>
                 <span className="text-muted">{b.slot}</span>
               </li>
             ))}

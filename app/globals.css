@@ -75,6 +75,34 @@ h3 {
   font-size: 1.05rem;
 }
 
+@layer components {
+.page {
+  width: 100%;
+  max-width: 72rem;
+  margin-inline: auto;
+  padding: 2rem 1rem;
+}
+@media (min-width: 640px) {
+  .page {
+    padding-inline: 1.5rem;
+  }
+}
+
+/* Dark gradient so text stays readable over photos */
+.photo-scrim {
+  background: linear-gradient(180deg, rgb(14 25 47 / 0) 40%, rgb(14 25 47 / 0.75) 100%);
+}
+.hero-scrim {
+  background:
+    linear-gradient(90deg, rgb(14 25 47 / 0.92) 0%, rgb(14 25 47 / 0.75) 45%, rgb(14 25 47 / 0.25) 100%),
+    linear-gradient(0deg, rgb(14 25 47 / 0.5), transparent 40%);
+}
+.glass {
+  background: rgb(255 255 255 / 0.1);
+  border: 1px solid rgb(255 255 255 / 0.18);
+  backdrop-filter: blur(14px);
+}
+
 .card {
   background: var(--color-white);
   border: 1px solid var(--color-line);
@@ -142,6 +170,7 @@ h3 {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,30 +1,14 @@
 import "server-only";
-import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { env } from "./env";
+import { ACCESS_COOKIE, ACCESS_GRANTED, readSigned, safeEqual, signedValue } from "./signing";
+
+export { readSigned, signedValue };
 import { DEFAULT_USER_ID, getDemoUser, type DemoUser } from "@/lib/data";
 
 // Prototype identity: a signed cookie picks one of the demo users. Production would use real auth.
 const USER_COOKIE = "gv_uid";
 const ADMIN_COOKIE = "gv_admin";
-
-const sign = (value: string) => createHmac("sha256", env.sessionSecret()).update(value).digest("base64url");
-
-function safeEqual(a: string, b: string) {
-  const ab = Buffer.from(a);
-  const bb = Buffer.from(b);
-  return ab.length === bb.length && timingSafeEqual(ab, bb);
-}
-
-export const signedValue = (value: string) => `${value}.${sign(value)}`;
-
-export function readSigned(raw: string | undefined): string | null {
-  if (!raw || !env.sessionSecret()) return null;
-  const i = raw.lastIndexOf(".");
-  if (i < 1) return null;
-  const value = raw.slice(0, i);
-  return safeEqual(raw.slice(i + 1), sign(value)) ? value : null;
-}
 
 export async function currentUser(): Promise<DemoUser> {
   const jar = await cookies();
@@ -64,4 +48,36 @@ export async function setAdmin(on: boolean) {
     path: "/",
     maxAge: 60 * 60 * 8,
   });
+}
+
+/* ---------------------------------------------------------------- internal access gate */
+
+// Internal prototype: every page sits behind an access code. Client-requested default 412099;
+// APP_ACCESS_CODE overrides it (set a different value in Netlify for anything shared wider).
+const accessCode = () => process.env.APP_ACCESS_CODE || "412099";
+
+export async function hasAccess(): Promise<boolean> {
+  if (!env.sessionSecret()) return false;
+  const jar = await cookies();
+  return readSigned(jar.get(ACCESS_COOKIE)?.value) === ACCESS_GRANTED;
+}
+
+export function checkAccessCode(code: string) {
+  return safeEqual(code.trim(), accessCode());
+}
+
+export async function grantAccess() {
+  const jar = await cookies();
+  jar.set(ACCESS_COOKIE, signedValue(ACCESS_GRANTED), {
+    httpOnly: true,
+    sameSite: "lax", // must survive the redirect back from Didit
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 60 * 12,
+  });
+}
+
+export async function revokeAccess() {
+  const jar = await cookies();
+  jar.delete(ACCESS_COOKIE);
 }

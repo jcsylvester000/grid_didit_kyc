@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { BedDouble, Bath, Ruler, MapPin, Lock, LockOpen, CalendarCheck } from "lucide-react";
 import { getListing, formatPhp } from "@/lib/data";
-import { ListingArt, Notice, OutcomeChip, OwnerBadge, VerifiedBadge, DbMissing } from "@/components/ui";
+import { ListingPhoto, Notice, OutcomeChip, OwnerBadge, VerifiedBadge, DbMissing } from "@/components/ui";
+import { listingPhotos } from "@/lib/photos";
 import { currentUser } from "@/lib/server/session";
 import { dbConfigured } from "@/lib/server/db";
 import { findReusable, latestVerification, userBookings } from "@/lib/server/kyc";
@@ -30,13 +31,23 @@ export default async function ListingPage({ params, searchParams }: Props) {
   const booked = bookings.filter((b) => b.listing_id === listing.id);
   const waiting = !verified && latest && ["review", "pending", "in_progress"].includes(latest.outcome) ? latest : null;
 
+  const photos = listingPhotos(listing.id);
+
   return (
-    <div className="grid lg:grid-cols-[1.5fr_1fr] gap-8">
+    <div className="page space-y-6">
+      <Link href="/#listings" className="text-sm text-muted hover:text-nile">← All listings</Link>
+
+      {/* Gallery */}
+      <div className="grid grid-cols-4 grid-rows-2 gap-2 sm:gap-3 h-[260px] sm:h-[420px] rounded-[22px] overflow-hidden">
+        <ListingPhoto photo={photos[0]} sizes="(min-width:1024px) 66vw, 100vw" priority className="col-span-4 sm:col-span-3 row-span-2" />
+        {photos.slice(1, 3).map((ph) => (
+          <ListingPhoto key={ph.src} photo={ph} sizes="25vw" className="hidden sm:block" />
+        ))}
+      </div>
+      <p className="text-xs text-muted -mt-3">Sample photos (Unsplash): {photos.map((p) => p.credit).join(", ")}.</p>
+
+      <div className="grid lg:grid-cols-[1.5fr_1fr] gap-8">
       <article className="space-y-6">
-        <Link href="/" className="text-sm text-muted hover:text-nile">← All listings</Link>
-        <div className="card overflow-hidden">
-          <ListingArt tint={listing.tint} label={`Illustration for ${listing.title}`} />
-        </div>
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             {listing.ownerAuthorized && <OwnerBadge />}
@@ -45,21 +56,29 @@ export default async function ListingPage({ params, searchParams }: Props) {
           <h1 className="text-3xl sm:text-4xl text-nile">{listing.title}</h1>
           <p className="text-2xl font-semibold">{formatPhp(listing.rentPhp)}<span className="text-base font-normal text-muted"> / month</span></p>
           <p className="text-muted flex items-center gap-1.5"><MapPin size={16} aria-hidden /> {listing.area}</p>
-          <p className="text-sm text-muted flex gap-5">
-            <span className="flex items-center gap-1.5"><BedDouble size={16} aria-hidden /> {listing.beds ? `${listing.beds} bedroom` : "Studio"}</span>
-            <span className="flex items-center gap-1.5"><Bath size={16} aria-hidden /> {listing.baths} bath</span>
-            <span className="flex items-center gap-1.5"><Ruler size={16} aria-hidden /> {listing.sqm} sqm</span>
-          </p>
         </div>
+        <dl className="grid grid-cols-3 gap-3">
+          {[
+            { Icon: BedDouble, k: "Bedrooms", v: listing.beds ? String(listing.beds) : "Studio" },
+            { Icon: Bath, k: "Bathrooms", v: String(listing.baths) },
+            { Icon: Ruler, k: "Floor area", v: `${listing.sqm} sqm` },
+          ].map(({ Icon, k, v }) => (
+            <div key={k} className="card p-4">
+              <Icon size={18} className="text-muesli" aria-hidden />
+              <dt className="text-xs text-muted mt-2">{k}</dt>
+              <dd className="font-semibold">{v}</dd>
+            </div>
+          ))}
+        </dl>
         {listing.ownerAuthorized && (
-          <p className="text-xs text-muted border-l-2 border-muesli pl-3">
-            Owner-Authorized means the owner verified their identity and their name matches the title copy they uploaded. Before paying
-            anything, ask for a Certified True Copy of the title from the Registry of Deeds.
+          <p className="text-sm text-muted border-l-2 border-muesli pl-3">
+            <b className="text-midnight">Owner-Authorized</b> means the owner verified their identity and their name matches the title copy they uploaded.
+            Before paying anything, ask for a Certified True Copy of the title from the Registry of Deeds.
           </p>
         )}
       </article>
 
-      <aside className="space-y-4 lg:pt-10">
+      <aside className="space-y-4 lg:sticky lg:top-6 self-start">
         {sp.reused && verified && (
           <Notice tone="ok">You&apos;re already verified, so we reused your earlier check. No new check was needed.</Notice>
         )}
@@ -114,6 +133,7 @@ export default async function ListingPage({ params, searchParams }: Props) {
           </div>
         )}
       </aside>
+      </div>
     </div>
   );
 }

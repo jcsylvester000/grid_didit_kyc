@@ -32,7 +32,7 @@ export default async function AdminPage({ searchParams }: Props) {
   const sp = await searchParams;
   if (!(await isAdmin())) {
     return (
-      <div className="max-w-sm mx-auto card p-6 space-y-4">
+      <div className="page"><div className="max-w-sm mx-auto card p-6 space-y-4">
         <h1 className="text-2xl text-nile">Grid staff console</h1>
         {!env.adminCode() && <Notice tone="bad">ADMIN_ACCESS_CODE is not set. Add it in Netlify environment variables.</Notice>}
         {sp.error && <Notice tone="bad">That code didn&apos;t work.</Notice>}
@@ -44,7 +44,7 @@ export default async function AdminPage({ searchParams }: Props) {
         {process.env.NODE_ENV !== "production" && !process.env.ADMIN_ACCESS_CODE && (
           <p className="text-xs text-muted">Local dev default: <code>grid-admin-dev</code></p>
         )}
-      </div>
+      </div></div>
     );
   }
   if (!dbConfigured()) return <DbMissing />;
@@ -64,7 +64,7 @@ export default async function AdminPage({ searchParams }: Props) {
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="page space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="eyebrow">Staff console</p>

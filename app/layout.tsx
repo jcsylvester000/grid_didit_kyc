@@ -7,6 +7,7 @@ import "@fontsource/judson/400.css";
 import "@fontsource/judson/400-italic.css";
 import "./globals.css";
 import { SiteHeader } from "@/components/SiteHeader";
+import { hasAccess } from "@/lib/server/session";
 
 export const metadata: Metadata = {
   title: { default: "GRID Verified", template: "%s · GRID Verified" },
@@ -14,7 +15,16 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Internal app: proxy.ts rewrites every page to /unlock until the access code is entered.
+  // Without access, render only that page (no header, no user data).
+  if (!(await hasAccess())) {
+    return (
+      <html lang="en-PH">
+        <body className="min-h-dvh bg-midnight">{children}</body>
+      </html>
+    );
+  }
   return (
     <html lang="en-PH">
       <body className="min-h-dvh flex flex-col">
@@ -22,14 +32,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to content
         </a>
         <SiteHeader />
-        <main id="main" className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 py-8">
+        <main id="main" className="flex-1 w-full">
           {children}
         </main>
         <footer className="border-t border-line bg-white">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 text-xs text-muted flex flex-col sm:flex-row gap-2 sm:justify-between">
             <p>Prototype · sample listings and people are invented · not legal advice.</p>
             <p>
-              Identity checks by Didit. Images processed in the EU; Grid keeps only the result.
+              Identity checks by Didit. ID images processed in the EU; Grid keeps only the result. Sample photos from Unsplash.
             </p>
           </div>
         </footer>

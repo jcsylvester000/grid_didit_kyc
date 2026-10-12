@@ -2,7 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
-  images: { formats: ["image/avif", "image/webp"] },
+  images: {
+    loader: "custom",
+    loaderFile: "./lib/image-loader.ts",
+  },
 };
 
 export default nextConfig;

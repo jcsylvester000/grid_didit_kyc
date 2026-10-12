@@ -7,7 +7,8 @@ import { currentUser } from "@/lib/server/session";
 import { dbConfigured } from "@/lib/server/db";
 import { getVerification, refreshFromDidit } from "@/lib/server/kyc";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { DbMissing } from "@/components/ui";
+import { DbMissing, ListingPhoto } from "@/components/ui";
+import { listingPhotos } from "@/lib/photos";
 import type { Outcome } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -44,9 +45,16 @@ export default async function ResultPage({ searchParams }: Props) {
   const body = v.outcome === "retry" && v.failure_reason && RETRY_HINT[v.failure_reason] ? RETRY_HINT[v.failure_reason] : c.body;
 
   return (
-    <div className="max-w-xl mx-auto">
+    <div className="page max-w-xl">
       {v.outcome === "in_progress" && <AutoRefresh />}
-      <div className="card p-6 sm:p-8 space-y-6 text-center">
+      <div className="card overflow-hidden">
+      {listing && (
+        <div className="relative h-36">
+          <ListingPhoto photo={listingPhotos(listing.id)[0]} sizes="576px" scrim className="absolute inset-0" />
+          <p className="absolute bottom-3 left-5 right-5 text-white text-sm font-medium drop-shadow">{listing.title}</p>
+        </div>
+      )}
+      <div className="p-6 sm:p-8 space-y-6 text-center">
         <div className={`mx-auto size-16 rounded-full grid place-items-center ${c.tone}`}>
           <c.Icon size={30} className={v.outcome === "in_progress" ? "animate-spin" : ""} aria-hidden />
         </div>
@@ -73,6 +81,7 @@ export default async function ResultPage({ searchParams }: Props) {
         {v.didit_session_number && (
           <p className="text-xs text-muted">Reference: Didit session #{v.didit_session_number}</p>
         )}
+      </div>
       </div>
     </div>
   );
