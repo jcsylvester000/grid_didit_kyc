@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { Camera, ScanFace, Cpu } from "lucide-react";
-import { currentUser } from "@/lib/server/session";
+import { requireUser } from "@/lib/server/session";
 import { getVerificationBySession, MOCK_SCENARIOS } from "@/lib/server/kyc";
 import { idTypeLabel } from "@/lib/data";
 import { mockCompleteAction } from "@/app/actions";
@@ -14,7 +14,7 @@ type Props = { params: Promise<{ sessionId: string }> };
 /** Stand-in for Didit's hosted verification page while no API key is configured. */
 export default async function MockDidit({ params }: Props) {
   const { sessionId } = await params;
-  const user = await currentUser();
+  const user = await requireUser(`/mock-didit/${sessionId}`);
   const v = sessionId.startsWith("mock_") ? await getVerificationBySession(sessionId) : null;
   if (!v || v.user_id !== user.id || v.mode !== "mock") redirect("/");
   if (v.outcome !== "in_progress") redirect(`/verify/result?v=${v.id}`);

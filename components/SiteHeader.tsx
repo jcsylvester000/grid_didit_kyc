@@ -1,11 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
-import { DEMO_USERS } from "@/lib/data";
+import { LockKeyhole, LogOut } from "lucide-react";
 import { currentUser } from "@/lib/server/session";
 import { isMockMode } from "@/lib/server/env";
-import { UserSwitcher } from "./UserSwitcher";
-import { LockKeyhole } from "lucide-react";
-import { lockAction } from "@/app/actions";
+import { lockAction, logoutAction } from "@/app/actions";
+
+const initials = (name: string) => name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
 export async function SiteHeader() {
   const user = await currentUser();
@@ -24,11 +24,28 @@ export async function SiteHeader() {
           </Link>
           <nav className="hidden md:flex items-center gap-5 text-sm text-white/85" aria-label="Main">
             <Link href="/" className="hover:text-burly">Listings</Link>
-            <Link href="/account" className="hover:text-burly">My verification</Link>
+            {user && <Link href="/account" className="hover:text-burly">My account</Link>}
             <Link href="/admin" className="hover:text-burly">Admin</Link>
           </nav>
           <div className="ml-auto flex items-center gap-2 min-w-0">
-            <UserSwitcher users={DEMO_USERS.map((u) => ({ id: u.id, label: `${u.name} · ${u.note}` }))} current={user.id} />
+            {user ? (
+              <>
+                <Link href="/account" className="flex items-center gap-2 rounded-full pl-1 pr-3 py-1 hover:bg-white/10 min-w-0" title="My account">
+                  <span className="grid place-items-center size-8 rounded-full bg-muesli text-midnight text-xs font-semibold shrink-0" aria-hidden>{initials(user.name)}</span>
+                  <span className="text-sm truncate max-w-[7rem] sm:max-w-[12rem]">{user.name.split(" ")[0]}</span>
+                </Link>
+                <form action={logoutAction}>
+                  <button className="grid place-items-center size-10 rounded-full border border-white/20 text-white/80 hover:text-burly hover:border-burly" aria-label="Sign out" title="Sign out">
+                    <LogOut size={16} aria-hidden />
+                  </button>
+                </form>
+              </>
+            ) : (
+              <>
+                <Link href="/login" className="text-sm px-2 sm:px-3 py-2 hover:text-burly whitespace-nowrap">Sign in</Link>
+                <Link href="/register" className="btn bg-white text-midnight hover:bg-burly !min-h-9 !px-3 sm:!px-4 text-sm whitespace-nowrap">Register</Link>
+              </>
+            )}
             <form action={lockAction}>
               <button className="grid place-items-center size-10 rounded-full border border-white/20 text-white/80 hover:text-burly hover:border-burly" aria-label="Lock the app" title="Lock">
                 <LockKeyhole size={16} aria-hidden />
@@ -40,7 +57,7 @@ export async function SiteHeader() {
       <div className="brand-rule" />
       <nav className="md:hidden bg-white border-b border-line text-sm flex justify-around py-2" aria-label="Main mobile">
         <Link href="/">Listings</Link>
-        <Link href="/account">My verification</Link>
+        {user && <Link href="/account">My account</Link>}
         <Link href="/admin">Admin</Link>
       </nav>
     </header>

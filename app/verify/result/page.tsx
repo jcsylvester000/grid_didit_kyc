@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { BadgeCheck, Clock, Eye, RotateCcw, XCircle, Loader2 } from "lucide-react";
 import { getListing } from "@/lib/data";
-import { currentUser } from "@/lib/server/session";
+import { requireUser } from "@/lib/server/session";
 import { dbConfigured } from "@/lib/server/db";
 import { getVerification, refreshFromDidit } from "@/lib/server/kyc";
 import { AutoRefresh } from "@/components/AutoRefresh";
@@ -35,7 +35,7 @@ const RETRY_HINT: Record<string, string> = {
 export default async function ResultPage({ searchParams }: Props) {
   if (!dbConfigured()) return <DbMissing />;
   const sp = await searchParams;
-  const user = await currentUser();
+  const user = await requireUser(`/verify/result?v=${sp.v ?? ""}`);
   let v = sp.v ? await getVerification(sp.v) : null;
   if (!v || v.user_id !== user.id) redirect("/account");
   v = await refreshFromDidit(v);

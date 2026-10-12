@@ -12,6 +12,8 @@ export type Listing = {
   rentPhp: number; // monthly rent, whole pesos
   owner: string;
   ownerAuthorized: boolean;
+  /** Owner's choice: true = exact address + booking need a passed ID check; false = open to any signed-in user. */
+  requiresKyc: boolean;
   city: "Metro Manila" | "Cebu";
   slots: string[];
 };
@@ -29,6 +31,7 @@ export const LISTINGS: Listing[] = [
     rentPhp: 45000,
     owner: "Owner (OFW, Dubai)",
     ownerAuthorized: true,
+    requiresKyc: true,
     city: "Metro Manila",
     slots: ["Sat 17 Oct · 10:00 AM", "Sat 17 Oct · 2:00 PM", "Sun 18 Oct · 11:00 AM"],
   },
@@ -44,6 +47,7 @@ export const LISTINGS: Listing[] = [
     rentPhp: 95000,
     owner: "Private owner",
     ownerAuthorized: true,
+    requiresKyc: true,
     city: "Metro Manila",
     slots: ["Fri 16 Oct · 6:00 PM", "Sat 17 Oct · 9:00 AM"],
   },
@@ -59,6 +63,7 @@ export const LISTINGS: Listing[] = [
     rentPhp: 18000,
     owner: "Broker-managed",
     ownerAuthorized: false,
+    requiresKyc: false,
     city: "Metro Manila",
     slots: ["Thu 15 Oct · 7:00 PM", "Sat 17 Oct · 1:00 PM", "Sun 18 Oct · 3:00 PM"],
   },
@@ -74,6 +79,7 @@ export const LISTINGS: Listing[] = [
     rentPhp: 150000,
     owner: "Private owner",
     ownerAuthorized: true,
+    requiresKyc: true,
     city: "Metro Manila",
     slots: ["Sat 17 Oct · 11:00 AM", "Sun 18 Oct · 10:00 AM"],
   },
@@ -89,6 +95,7 @@ export const LISTINGS: Listing[] = [
     rentPhp: 22000,
     owner: "Owner (OFW, Singapore)",
     ownerAuthorized: true,
+    requiresKyc: false,
     city: "Cebu",
     slots: ["Sat 17 Oct · 3:00 PM", "Mon 19 Oct · 6:30 PM"],
   },
@@ -104,6 +111,7 @@ export const LISTINGS: Listing[] = [
     rentPhp: 38000,
     owner: "Broker-managed",
     ownerAuthorized: false,
+    requiresKyc: false,
     city: "Metro Manila",
     slots: ["Sun 18 Oct · 9:00 AM", "Sun 18 Oct · 4:00 PM"],
   },
@@ -111,16 +119,16 @@ export const LISTINGS: Listing[] = [
 
 export const getListing = (id: string | null | undefined) => LISTINGS.find((l) => l.id === id);
 
-export type DemoUser = { id: string; name: string; email: string; role: "tenant" | "owner" | "broker"; note: string };
+export type Role = "tenant" | "owner" | "broker";
 
-export const DEMO_USERS: DemoUser[] = [
+/** Seeded demo accounts (sign in with DEMO_PASSWORD). Paolo starts with a passed check to show reuse. */
+export const DEMO_ACCOUNTS: { id: string; name: string; email: string; role: Role; note: string }[] = [
   { id: "demo-tenant-maria", name: "Maria Santos", email: "maria@example.com", role: "tenant", note: "New tenant, not verified" },
   { id: "demo-tenant-paolo", name: "Paolo Reyes", email: "paolo@example.com", role: "tenant", note: "Returning tenant, already verified" },
-  { id: "demo-tenant-ana", name: "Ana Cruz", email: "ana@example.com", role: "tenant", note: "New tenant (OFW, uses passport)" },
+  { id: "demo-tenant-ana", name: "Ana Cruz", email: "ana@example.com", role: "tenant", note: "OFW tenant, uses passport" },
 ];
-
-export const DEFAULT_USER_ID = DEMO_USERS[0].id;
-export const getDemoUser = (id: string | null | undefined) => DEMO_USERS.find((u) => u.id === id);
+export const DEMO_PASSWORD = "GridDemo2026";
+export const isDemoAccount = (id: string) => DEMO_ACCOUNTS.some((u) => u.id === id);
 
 export const ID_TYPES = [
   { value: "philid", label: "PhilID / ePhilID", hint: "National ID" },

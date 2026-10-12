@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { getListing } from "@/lib/data";
-import { currentUser } from "@/lib/server/session";
+import { requireUser } from "@/lib/server/session";
 import { dbConfigured } from "@/lib/server/db";
 import { audit } from "@/lib/server/audit";
 import { findReusable, latestVerification } from "@/lib/server/kyc";
@@ -20,7 +20,9 @@ export default async function VerifyPage({ searchParams }: Props) {
   if (!dbConfigured()) return <DbMissing />;
   const sp = await searchParams;
   const listing = getListing(sp.listing);
-  const user = await currentUser();
+  const user = await requireUser(`/verify?listing=${listing?.id ?? ""}`);
+  // Open listings never need an ID check (verify at the moment of value).
+  if (listing && !listing.requiresKyc) redirect(`/listings/${listing.id}`);
 
   // Rule 2: a verified user never repeats the full check. Skip consent + Didit entirely.
   const reusable = await findReusable(user.id);

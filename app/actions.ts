@@ -3,12 +3,14 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { getDemoUser, getListing, isIdType } from "@/lib/data";
+import { getListing, isIdType } from "@/lib/data";
 import { audit } from "@/lib/server/audit";
-import { checkAccessCode, checkAdminCode, currentUser, grantAccess, hasAccess, isAdmin, revokeAccess, setAdmin, setCurrentUser } from "@/lib/server/session";
+import { checkAccessCode, checkAdminCode, currentUser, grantAccess, hasAccess, isAdmin, requireUser, revokeAccess, setAdmin, setCurrentUser, signOutUser } from "@/lib/server/session";
+import { authenticate, createUser, normalizePhMobile } from "@/lib/server/auth";
 import {
   applyDecision,
   bookViewing,
+  deleteRegisteredAccounts,
   buildMockDecision,
   getVerification,
   getVerificationBySession,
@@ -54,17 +56,58 @@ export async function lockAction() {
 /** Only allow same-site relative paths as redirect targets. */
 const safeNext = (p: string) => (p.startsWith("/") && !p.startsWith("//") ? p : "/");
 
-export async function switchUserAction(form: FormData) {
+/* ---------------------------------------------------------------- accounts */
+
+export type AuthState = { error: string | null; fields?: Record<string, string> };
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+export async function registerAction(_prev: AuthState, form: FormData): Promise<AuthState> {
   await requireAccess();
-  const id = str(form, "userId");
-  if (getDemoUser(id)) await setCurrentUser(id);
+  const name = str(form, "name").replace(/\s+/g, " ");
+  const email = str(form, "email");
+  const phoneRaw = str(form, "phone");
+  const password = String(form.get("password") ?? "");
+  const fields = { name, email, phone: phoneRaw };
+  if (name.length < 2) return { error: "Please enter your full name.", fields };
+  if (!EMAIL_RE.test(email)) return { error: "Please enter a valid email address.", fields };
+  const phone = phoneRaw ? normalizePhMobile(phoneRaw) : null;
+  if (phoneRaw && !phone) return { error: "Mobile number should look like 0917 123 4567.", fields };
+  if (password.length < 8) return { error: "Password must be at least 8 characters.", fields };
+  if (form.get("terms") !== "on") return { error: "Please agree to the Terms and Privacy Notice.", fields };
+
+  const user = await createUser({ name, email, phone, password, role: "tenant" });
+  if (!user) return { error: "An account with this email already exists. Sign in instead.", fields };
+  await setCurrentUser(user.id);
+  await audit(`user:${user.id}`, "user.registered", { userId: user.id }); // no email/phone in the audit log
+  const next = safeNext(str(form, "next"));
+  redirect(next === "/" ? "/?welcome=1" : next);
+}
+
+export async function loginAction(_prev: AuthState, form: FormData): Promise<AuthState> {
+  await requireAccess();
+  const email = str(form, "email");
+  const user = await authenticate(email, String(form.get("password") ?? ""));
+  if (!user) {
+    await audit("visitor", "user.login_failed");
+    return { error: "Email or password is incorrect.", fields: { email } };
+  }
+  await setCurrentUser(user.id);
+  await audit(`user:${user.id}`, "user.login", { userId: user.id });
   redirect(safeNext(str(form, "next")));
+}
+
+export async function logoutAction() {
+  const user = await currentUser();
+  await signOutUser();
+  if (user) await audit(`user:${user.id}`, "user.logout", { userId: user.id });
+  redirect("/");
 }
 
 export async function startVerificationAction(form: FormData) {
   await requireAccess();
-  const user = await currentUser();
   const listingId = getListing(str(form, "listingId"))?.id ?? null;
+  const user = await requireUser(`/verify?listing=${listingId ?? ""}`);
   const idType = str(form, "idType");
   if (form.get("consent") !== "yes") redirect(`/verify?listing=${listingId ?? ""}&error=consent`);
   if (!isIdType(idType)) redirect(`/verify?listing=${listingId ?? ""}&error=id`);
@@ -80,17 +123,17 @@ export async function startVerificationAction(form: FormData) {
 
 export async function bookViewingAction(form: FormData) {
   await requireAccess();
-  const user = await currentUser();
   const listing = getListing(str(form, "listingId"));
   const slot = str(form, "slot");
   if (!listing || !listing.slots.includes(slot)) redirect("/");
+  const user = await requireUser(`/listings/${listing.id}`);
   await bookViewing(user.id, listing.id, slot);
   redirect(`/listings/${listing.id}?booked=1`);
 }
 
 export async function requestErasureAction() {
   await requireAccess();
-  const user = await currentUser();
+  const user = await requireUser("/account");
   // Prototype: log the request for the DPO. Production: delete Grid rows + call Didit "privacy erasure".
   await audit(`user:${user.id}`, "privacy.erasure_requested", { userId: user.id });
   redirect("/account?erasure=1");
@@ -104,9 +147,9 @@ export async function mockCompleteAction(form: FormData) {
   const scenario = str(form, "scenario") as MockScenario;
   const v = sessionId.startsWith("mock_") ? await getVerificationBySession(sessionId) : null;
   if (!v || v.mode !== "mock" || !(scenario in MOCK_SCENARIOS)) redirect("/");
-  const user = await currentUser();
+  const user = await requireUser("/account");
   if (v.user_id !== user.id) redirect("/");
-  await applyDecision(v, buildMockDecision(v, scenario), "didit:mock");
+  await applyDecision(v, buildMockDecision(v, scenario, user.name), "didit:mock");
   redirect(`/verify/result?v=${v.id}`);
 }
 
@@ -153,6 +196,14 @@ export async function adminToggleOutageAction(form: FormData) {
   await audit("admin", on ? "settings.outage_simulated" : "settings.outage_cleared");
   revalidatePath("/admin");
   redirect("/admin");
+}
+
+export async function adminDeleteAccountsAction() {
+  await requireAccess();
+  await requireAdmin();
+  await deleteRegisteredAccounts();
+  revalidatePath("/admin");
+  redirect("/admin?accounts=1");
 }
 
 export async function adminResetDemoAction() {

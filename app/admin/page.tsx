@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
-import { getDemoUser, getListing, idTypeLabel, PRICING } from "@/lib/data";
+import { getListing, idTypeLabel, isDemoAccount, PRICING } from "@/lib/data";
+import { listUsers } from "@/lib/server/auth";
 import { isAdmin } from "@/lib/server/session";
 import { dbConfigured } from "@/lib/server/db";
 import { env, isMockMode } from "@/lib/server/env";
 import { adminSnapshot } from "@/lib/server/kyc";
 import { DbMissing, Notice, OutcomeChip } from "@/components/ui";
-import { adminDecideAction, adminLoginAction, adminLogoutAction, adminResetDemoAction, adminToggleOutageAction } from "@/app/actions";
+import { adminDecideAction, adminDeleteAccountsAction, adminLoginAction, adminLogoutAction, adminResetDemoAction, adminToggleOutageAction } from "@/app/actions";
 import type { Outcome } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +16,6 @@ export const metadata: Metadata = { title: "Admin" };
 type Props = { searchParams: Promise<Record<string, string | undefined>> };
 
 const fmt = (d: string | null) => (d ? new Date(d).toLocaleString("en-PH", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Manila" }) : "—");
-const who = (id: string | null) => (id ? getDemoUser(id)?.name ?? id : "—");
 
 const REASON: Record<string, string> = {
   didit_in_review: "Didit flagged for review",
@@ -49,7 +49,9 @@ export default async function AdminPage({ searchParams }: Props) {
   }
   if (!dbConfigured()) return <DbMissing />;
 
-  const s = await adminSnapshot();
+  const [s, users] = await Promise.all([adminSnapshot(), listUsers()]);
+  const names = new Map(users.map((u) => [u.id, u.name]));
+  const who = (id: string | null) => (id ? names.get(id) ?? "Deleted account" : "—");
   const mock = isMockMode();
   const used = mock ? s.completedMock : s.completedLive;
   const pct = Math.min(100, Math.round((used / PRICING.freePerFeature) * 100));
@@ -73,6 +75,7 @@ export default async function AdminPage({ searchParams }: Props) {
         <form action={adminLogoutAction}><button className="btn btn-ghost">Sign out</button></form>
       </div>
       {sp.reset && <Notice tone="ok">Demo data reset. Paolo&apos;s sample verification was re-created.</Notice>}
+      {sp.accounts && <Notice tone="ok">Registered test accounts deleted. Demo accounts were kept.</Notice>}
 
       {/* Configuration */}
       <section className="grid md:grid-cols-3 gap-4">
@@ -96,8 +99,11 @@ export default async function AdminPage({ searchParams }: Props) {
         </div>
         <div className="card p-5 space-y-3 text-sm">
           <h2 className="text-lg text-nile">Demo data</h2>
-          <p className="text-muted">Clears verifications, consents, bookings and webhook events. The audit log is kept (append-only).</p>
-          <form action={adminResetDemoAction}><button className="btn btn-ghost">Reset demo data</button></form>
+          <p className="text-muted">Reset clears verifications, consents, bookings and webhook events (accounts kept). The audit log is append-only.</p>
+          <div className="flex flex-wrap gap-2">
+            <form action={adminResetDemoAction}><button className="btn btn-ghost">Reset demo data</button></form>
+            <form action={adminDeleteAccountsAction}><button className="btn btn-ghost">Delete registered accounts</button></form>
+          </div>
         </div>
       </section>
 
@@ -199,6 +205,29 @@ export default async function AdminPage({ searchParams }: Props) {
         )}
       </section>
 
+      {/* Users */}
+      <section className="space-y-3" aria-labelledby="users-h">
+        <h2 id="users-h" className="text-xl text-nile">Accounts ({users.length})</h2>
+        <div className="card overflow-x-auto">
+          <table className="table-tight w-full">
+            <thead><tr><th>Name</th><th>Email</th><th>Type</th><th>Identity</th><th>Viewings</th><th>Joined</th><th>Last sign-in</th></tr></thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id}>
+                  <td className="font-medium">{u.name}</td>
+                  <td>{u.email}</td>
+                  <td>{isDemoAccount(u.id) ? "Demo" : "Registered"}</td>
+                  <td>{u.kyc_outcome ? <OutcomeChip outcome={u.kyc_outcome as Outcome} /> : <span className="text-muted">Not started</span>}</td>
+                  <td className="tabular-nums">{u.bookings}</td>
+                  <td className="whitespace-nowrap">{fmt(u.created_at)}</td>
+                  <td className="whitespace-nowrap">{fmt(u.last_login_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       {/* Recent */}
       <section className="space-y-3">
         <h2 className="text-xl text-nile">Recent verifications</h2>
@@ -222,7 +251,7 @@ export default async function AdminPage({ searchParams }: Props) {
         </div>
       </section>
 
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 [&>section]:min-w-0">
         <section className="space-y-3">
           <h2 className="text-xl text-nile">Webhook events</h2>
           <div className="card overflow-x-auto">

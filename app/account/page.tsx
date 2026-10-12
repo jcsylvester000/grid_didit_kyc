@@ -1,7 +1,10 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { getListing, idTypeLabel } from "@/lib/data";
-import { currentUser } from "@/lib/server/session";
+import { requireUser } from "@/lib/server/session";
+import { journeyFor } from "@/lib/server/journey";
+import { JourneyTracker } from "@/components/JourneyTracker";
+import { logoutAction } from "@/app/actions";
 import { dbConfigured, q } from "@/lib/server/db";
 import { findReusable, userBookings, userVerifications } from "@/lib/server/kyc";
 import { DbMissing, ListingPhoto, Notice, OutcomeChip, VerifiedBadge } from "@/components/ui";
@@ -9,7 +12,7 @@ import { listingPhotos } from "@/lib/photos";
 import { requestErasureAction } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "My verification" };
+export const metadata: Metadata = { title: "My account" };
 
 type Props = { searchParams: Promise<Record<string, string | undefined>> };
 const fmt = (d: string | null) => (d ? new Date(d).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Manila" }) : "—");
@@ -17,8 +20,9 @@ const fmt = (d: string | null) => (d ? new Date(d).toLocaleString("en-PH", { dat
 export default async function AccountPage({ searchParams }: Props) {
   if (!dbConfigured()) return <DbMissing />;
   const sp = await searchParams;
-  const user = await currentUser();
-  const [verified, history, bookings, consents] = await Promise.all([
+  const user = await requireUser("/account");
+  const [journey, verified, history, bookings, consents] = await Promise.all([
+    journeyFor(user.id),
     findReusable(user.id),
     userVerifications(user.id),
     userBookings(user.id),
@@ -35,9 +39,29 @@ export default async function AccountPage({ searchParams }: Props) {
           {user.name.split(" ").map((w) => w[0]).join("")}
         </span>
         <div>
-          <p className="eyebrow">My verification</p>
+          <p className="eyebrow">My account</p>
           <h1 className="text-3xl text-nile">{user.name}</h1>
         </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <section className="card p-6 space-y-4" aria-labelledby="progress-h">
+          <h2 id="progress-h" className="text-xl text-nile">Your progress</h2>
+          {journey && <JourneyTracker journey={journey} />}
+          {!verified && (
+            <Link href="/?access=verified#listings" className="btn btn-ghost w-full">Browse Verified-only homes</Link>
+          )}
+        </section>
+        <section className="card p-6 space-y-3" aria-labelledby="details-h">
+          <h2 id="details-h" className="text-xl text-nile">Account details</h2>
+          <dl className="text-sm space-y-2">
+            <div className="flex justify-between gap-4"><dt className="text-muted">Email</dt><dd className="font-medium truncate">{user.email}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-muted">Mobile</dt><dd className="font-medium">{user.phone ?? "—"}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-muted">Member since</dt><dd className="font-medium">{fmt(user.created_at)}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-muted">Last sign-in</dt><dd className="font-medium">{fmt(user.last_login_at)}</dd></div>
+          </dl>
+          <form action={logoutAction}><button className="btn btn-ghost w-full">Sign out</button></form>
+        </section>
       </div>
       {sp.erasure && <Notice tone="ok">Deletion request sent to our Data Protection Officer. We&apos;ll erase your data from Grid and Didit and confirm by email.</Notice>}
 
@@ -50,18 +74,18 @@ export default async function AccountPage({ searchParams }: Props) {
           <>
             <p className="text-sm text-muted">This is everything Grid keeps from your check. Your ID photo and selfie stay with Didit and are deleted after the retention period.</p>
             <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
-              <div><dt className="text-muted">Verified name</dt><dd className="font-medium">{verified.verified_name ?? "—"}</dd></div>
+              <div><dt className="text-muted">Verified name</dt><dd className="font-medium">{verified.verified_name ?? (verified.reviewed_by ? "Confirmed by staff review" : "—")}</dd></div>
               <div><dt className="text-muted">Date of birth</dt><dd className="font-medium">{verified.date_of_birth ?? "—"}</dd></div>
               <div><dt className="text-muted">ID type</dt><dd className="font-medium">{verified.document_type ?? idTypeLabel(verified.id_type_chosen)}</dd></div>
               <div><dt className="text-muted">ID valid until</dt><dd className="font-medium">{verified.document_expiry ?? "—"}</dd></div>
               <div><dt className="text-muted">Verified on</dt><dd className="font-medium">{fmt(verified.decided_at)}</dd></div>
-              <div><dt className="text-muted">Didit session</dt><dd className="font-medium">{verified.didit_session_number ? `#${verified.didit_session_number}` : verified.mode === "seed" ? "Sample record" : "—"}</dd></div>
+              <div><dt className="text-muted">Didit session</dt><dd className="font-medium">{verified.didit_session_number ? `#${verified.didit_session_number}` : verified.mode === "seed" ? "Sample record" : verified.mode === "mock" ? "Simulated (mock mode)" : "—"}</dd></div>
             </dl>
           </>
         ) : history[0] && ["review", "pending", "in_progress", "retry"].includes(history[0].outcome) ? (
           <Link href={`/verify/result?v=${history[0].id}`} className="btn btn-ghost">See status</Link>
         ) : (
-          <p className="text-sm text-muted">You&apos;ll be asked to verify only when you book your first viewing.</p>
+          <p className="text-sm text-muted">Not needed yet. You&apos;ll be asked once, only when you book a Verified-only home.</p>
         )}
       </section>
 

@@ -2,7 +2,7 @@ import "server-only";
 import { neon, neonConfig, type NeonQueryFunction } from "@neondatabase/serverless";
 import { env } from "./env";
 import { SCHEMA_STATEMENTS } from "./schema";
-import { DEMO_USERS } from "@/lib/data";
+import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/data";
 
 let client: NeonQueryFunction<false, false> | null = null;
 let ready: Promise<void> | null = null;
@@ -21,11 +21,14 @@ function getClient() {
 async function migrate() {
   const sql = getClient();
   for (const stmt of SCHEMA_STATEMENTS) await sql.query(stmt);
-  for (const u of DEMO_USERS) {
+  const { hashPassword } = await import("./auth");
+  for (const u of DEMO_ACCOUNTS) {
     await sql.query(
-      `INSERT INTO kyc_users (id, display_name, email, role) VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO NOTHING`,
+      `INSERT INTO kyc_users (id, display_name, email, role) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
       [u.id, u.name, u.email, u.role],
     );
+    // Demo accounts get the shared demo password once (left alone if already set).
+    await sql.query(`UPDATE kyc_users SET password_hash = $2 WHERE id = $1 AND password_hash IS NULL`, [u.id, await hashPassword(DEMO_PASSWORD)]);
   }
   await seedReturningTenant();
 }

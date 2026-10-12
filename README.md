@@ -12,7 +12,18 @@ override with `APP_ACCESS_CODE`). Access lasts 12 hours per browser; the lock ic
 The check runs in `proxy.ts` before any page renders, so nothing is shown or sent until the code is entered.
 The Didit webhook and `/api/health` stay open.
 
-## What it does (v0.2)
+## Accounts and listing access (v0.3)
+
+- **Register** (`/register`): name, email, optional PH mobile, password. **No ID at sign-up.**
+- **Sign in / out** (`/login`). Passwords are hashed with scrypt; sessions are signed cookies (7 days).
+- Demo accounts (password `GridDemo2026`): `maria@example.com` (new), `paolo@example.com` (already verified),
+  `ana@example.com` (OFW). Shown on the sign-in page for the internal team.
+- **Open listings**: full details and exact address for everyone; any signed-in user can book.
+- **Verified-only listings**: exact address and booking unlock after a passed Didit check (reused after that).
+- **My account**: progress tracker (account → identity verified → viewing booked), details, consents, viewings.
+- **Admin**: Accounts table with each user's identity status; "Delete registered accounts" for test clean-up.
+
+## What it does
 
 | Journey | Where |
 |---|---|

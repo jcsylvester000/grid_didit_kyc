@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { BedDouble, Bath, Ruler, MapPin, Lock, LockOpen, CalendarCheck } from "lucide-react";
 import { getListing, formatPhp } from "@/lib/data";
-import { ListingPhoto, Notice, OutcomeChip, OwnerBadge, VerifiedBadge, DbMissing } from "@/components/ui";
+import { AccessBadge, ListingPhoto, Notice, OutcomeChip, OwnerBadge, VerifiedBadge, DbMissing } from "@/components/ui";
 import { listingPhotos } from "@/lib/photos";
 import { currentUser } from "@/lib/server/session";
 import { dbConfigured } from "@/lib/server/db";
@@ -27,9 +27,15 @@ export default async function ListingPage({ params, searchParams }: Props) {
   if (!dbConfigured()) return <DbMissing />;
 
   const user = await currentUser();
-  const [verified, latest, bookings] = await Promise.all([findReusable(user.id), latestVerification(user.id), userBookings(user.id)]);
+  const [verified, latest, bookings] = user
+    ? await Promise.all([findReusable(user.id), latestVerification(user.id), userBookings(user.id)])
+    : [null, null, []];
   const booked = bookings.filter((b) => b.listing_id === listing.id);
   const waiting = !verified && latest && ["review", "pending", "in_progress"].includes(latest.outcome) ? latest : null;
+  // Open listings show everything to everyone. Verified-only listings unlock after a passed ID check.
+  const addressVisible = !listing.requiresKyc || Boolean(verified);
+  const canBook = Boolean(user) && addressVisible;
+  const loginHref = `/login?next=${encodeURIComponent(`/listings/${listing.id}`)}`;
 
   const photos = listingPhotos(listing.id);
 
@@ -51,6 +57,7 @@ export default async function ListingPage({ params, searchParams }: Props) {
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             {listing.ownerAuthorized && <OwnerBadge />}
+            <AccessBadge requiresKyc={listing.requiresKyc} unlocked={Boolean(verified)} />
             <span className="text-xs text-muted">{listing.type} · {listing.owner}</span>
           </div>
           <h1 className="text-3xl sm:text-4xl text-nile">{listing.title}</h1>
@@ -84,39 +91,57 @@ export default async function ListingPage({ params, searchParams }: Props) {
         )}
         {sp.booked && <Notice tone="ok">Viewing booked. The owner has been notified.</Notice>}
 
-        {verified ? (
+        {addressVisible ? (
           <div className="card p-5 space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <h2 className="text-xl text-nile flex items-center gap-2"><LockOpen size={18} aria-hidden /> Exact address</h2>
-              <VerifiedBadge />
+              {listing.requiresKyc ? <VerifiedBadge /> : <AccessBadge requiresKyc={false} />}
             </div>
             <p className="font-medium">{listing.exactAddress}</p>
-            <form action={bookViewingAction} className="space-y-3">
-              <input type="hidden" name="listingId" value={listing.id} />
-              <fieldset className="space-y-2">
-                <legend className="text-sm font-medium mb-1">Choose a viewing slot</legend>
-                {listing.slots.map((s, i) => {
-                  const taken = booked.some((b) => b.slot === s);
-                  return (
-                    <label key={s} className="flex items-center gap-3 rounded-xl border border-line px-3 py-2.5 has-[:checked]:border-nile has-[:checked]:bg-nile-soft">
-                      <input type="radio" name="slot" value={s} defaultChecked={i === 0 && !taken} disabled={taken} required />
-                      <span className="text-sm">{s}</span>
-                      {taken && <span className="ml-auto text-xs text-ok flex items-center gap-1"><CalendarCheck size={14} aria-hidden /> Booked</span>}
-                    </label>
-                  );
-                })}
-              </fieldset>
-              <button className="btn btn-primary w-full" type="submit">Book this viewing</button>
-            </form>
+            {!listing.requiresKyc && (
+              <p className="text-xs text-muted">Open listing: the owner shares full details with everyone. No ID check needed to book.</p>
+            )}
+            {canBook ? (
+              <form action={bookViewingAction} className="space-y-3">
+                <input type="hidden" name="listingId" value={listing.id} />
+                <fieldset className="space-y-2">
+                  <legend className="text-sm font-medium mb-1">Choose a viewing slot</legend>
+                  {listing.slots.map((s, i) => {
+                    const taken = booked.some((b) => b.slot === s);
+                    return (
+                      <label key={s} className="flex items-center gap-3 rounded-xl border border-line px-3 py-2.5 has-[:checked]:border-nile has-[:checked]:bg-nile-soft">
+                        <input type="radio" name="slot" value={s} defaultChecked={i === 0 && !taken} disabled={taken} required />
+                        <span className="text-sm">{s}</span>
+                        {taken && <span className="ml-auto text-xs text-ok flex items-center gap-1"><CalendarCheck size={14} aria-hidden /> Booked</span>}
+                      </label>
+                    );
+                  })}
+                </fieldset>
+                <button className="btn btn-primary w-full" type="submit">Book this viewing</button>
+              </form>
+            ) : (
+              <div className="space-y-2">
+                <Link href={loginHref} className="btn btn-primary w-full">Sign in to book a viewing</Link>
+                <p className="text-xs text-muted text-center">New here? <Link className="underline" href={`/register?next=${encodeURIComponent(`/listings/${listing.id}`)}`}>Create a free account</Link>. No ID needed.</p>
+              </div>
+            )}
           </div>
         ) : (
           <div className="card p-5 space-y-4">
-            <h2 className="text-xl text-nile flex items-center gap-2"><Lock size={18} aria-hidden /> Exact address hidden</h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-xl text-nile flex items-center gap-2"><Lock size={18} aria-hidden /> Exact address hidden</h2>
+              <AccessBadge requiresKyc />
+            </div>
             <p className="text-sm text-muted">
-              To protect owners and tenants, Grid confirms your identity once before you see the exact address or book a viewing.
-              It takes about a minute.
+              The owner of this home accepts <b className="text-midnight">verified renters only</b>. Grid confirms your identity once before you see the
+              exact address or book. It takes about a minute, and it&apos;s reused for every future viewing.
             </p>
-            {waiting ? (
+            {!user ? (
+              <div className="space-y-2">
+                <Link href={loginHref} className="btn btn-primary w-full">Sign in to book a viewing</Link>
+                <p className="text-xs text-muted text-center">New here? <Link className="underline" href={`/register?next=${encodeURIComponent(`/listings/${listing.id}`)}`}>Create a free account</Link> first. No ID needed to sign up.</p>
+              </div>
+            ) : waiting ? (
               <div className="space-y-3">
                 <OutcomeChip outcome={waiting.outcome} />
                 <p className="text-sm text-muted">
@@ -129,7 +154,7 @@ export default async function ListingPage({ params, searchParams }: Props) {
             ) : (
               <Link href={`/verify?listing=${listing.id}`} className="btn btn-primary w-full">Book a viewing</Link>
             )}
-            <p className="text-xs text-muted">You can keep browsing, saving and messaging without verifying.</p>
+            <p className="text-xs text-muted">You can keep browsing and booking Open listings without verifying.</p>
           </div>
         )}
       </aside>

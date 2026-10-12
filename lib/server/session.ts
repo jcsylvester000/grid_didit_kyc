@@ -4,16 +4,35 @@ import { env } from "./env";
 import { ACCESS_COOKIE, ACCESS_GRANTED, readSigned, safeEqual, signedValue } from "./signing";
 
 export { readSigned, signedValue };
-import { DEFAULT_USER_ID, getDemoUser, type DemoUser } from "@/lib/data";
+import { redirect } from "next/navigation";
+import { getUser, type AppUser } from "./auth";
 
 // Prototype identity: a signed cookie picks one of the demo users. Production would use real auth.
 const USER_COOKIE = "gv_uid";
 const ADMIN_COOKIE = "gv_admin";
 
-export async function currentUser(): Promise<DemoUser> {
+/** The signed-in account, or null. Browsing works signed out; booking and ID checks need an account. */
+export async function currentUser(): Promise<AppUser | null> {
   const jar = await cookies();
   const id = readSigned(jar.get(USER_COOKIE)?.value);
-  return getDemoUser(id) ?? getDemoUser(DEFAULT_USER_ID)!;
+  if (!id) return null;
+  try {
+    return await getUser(id);
+  } catch {
+    return null;
+  }
+}
+
+/** Use in pages/actions that need an account; sends the visitor to sign in and back. */
+export async function requireUser(next: string): Promise<AppUser> {
+  const user = await currentUser();
+  if (!user) redirect(`/login?next=${encodeURIComponent(next)}`);
+  return user;
+}
+
+export async function signOutUser() {
+  const jar = await cookies();
+  jar.delete(USER_COOKIE);
 }
 
 export async function setCurrentUser(id: string) {
@@ -23,7 +42,7 @@ export async function setCurrentUser(id: string) {
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * 30,
+    maxAge: 60 * 60 * 24 * 7,
   });
 }
 

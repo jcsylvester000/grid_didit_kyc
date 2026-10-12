@@ -10,7 +10,8 @@ import {
   type DiditDecision,
   type DiditIdVerification,
 } from "./didit";
-import { CONSENT_VERSION, getDemoUser, idTypeLabel, type DemoUser, type IdType } from "@/lib/data";
+import { CONSENT_VERSION, getListing, idTypeLabel, type IdType } from "@/lib/data";
+import type { AppUser } from "./auth";
 import type { Outcome, VerificationRow } from "@/lib/types";
 
 const COLS = `id, user_id, consent_id, trigger_action, listing_id, id_type_chosen, mode, didit_session_id,
@@ -76,7 +77,7 @@ export type StartResult =
   | { kind: "reused"; verificationId: string };
 
 export async function startVerification(input: {
-  user: DemoUser;
+  user: AppUser;
   listingId: string | null;
   idType: IdType;
   consentId: string;
@@ -250,14 +251,21 @@ export async function staffDecide(id: string, action: ReviewAction, note: string
 
 /* ------------------------------------------------------------------ bookings */
 
+/** Open listings: any signed-in user can book. Verified-only listings: a passed, unexpired ID check is required. */
 export async function bookViewing(userId: string, listingId: string, slot: string) {
+  const listing = getListing(listingId);
+  if (!listing) throw new Error("Unknown listing");
   const reusable = await findReusable(userId);
-  if (!reusable) throw new Error("Identity not verified");
+  if (listing.requiresKyc && !reusable) throw new Error("Identity not verified");
   await q(
     `INSERT INTO kyc_bookings (user_id, listing_id, slot, verification_id) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
-    [userId, listingId, slot, reusable.id],
+    [userId, listingId, slot, listing.requiresKyc ? reusable!.id : null],
   );
-  await audit(`user:${userId}`, "viewing.booked", { userId, verificationId: reusable.id, detail: { listingId, slot } });
+  await audit(`user:${userId}`, "viewing.booked", {
+    userId,
+    verificationId: listing.requiresKyc ? reusable!.id : null,
+    detail: { listingId, slot, access: listing.requiresKyc ? "verified_only" : "open" },
+  });
 }
 
 export const userBookings = (userId: string) =>
@@ -279,14 +287,13 @@ export const MOCK_SCENARIOS = {
 export type MockScenario = keyof typeof MOCK_SCENARIOS;
 
 /** Build a decision in Didit's v3 shape so the mock and live paths share applyDecision(). */
-export function buildMockDecision(v: VerificationRow, scenario: MockScenario): DiditDecision {
-  const user = getDemoUser(v.user_id);
+export function buildMockDecision(v: VerificationRow, scenario: MockScenario, userName: string): DiditDecision {
   const ok = { status: "Approved", warnings: [] };
   const expiry = new Date(Date.now() + 4 * 365 * 864e5).toISOString().slice(0, 10);
   const idv: DiditIdVerification = {
     status: "Approved",
     document_type: idTypeLabel(v.id_type_chosen),
-    full_name: (user?.name ?? "Demo User").toUpperCase(),
+    full_name: userName.toUpperCase(),
     date_of_birth: "1994-08-21",
     expiration_date: expiry,
     issuing_state: "PHL",
@@ -344,6 +351,12 @@ export async function adminSnapshot() {
     log,
     outage: await isOutageSimulated(),
   };
+}
+
+/** Delete accounts created through Register (demo accounts are kept). */
+export async function deleteRegisteredAccounts() {
+  const rows = await q<{ n: number }>(`WITH d AS (DELETE FROM kyc_users WHERE id LIKE 'usr_%' RETURNING 1) SELECT count(*)::int AS n FROM d`);
+  await audit("admin", "demo.accounts_deleted", { detail: { count: rows[0]?.n ?? 0 } });
 }
 
 export async function resetDemoData() {

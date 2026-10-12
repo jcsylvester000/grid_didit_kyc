@@ -1,6 +1,6 @@
 import Image from "next/image";
 import type { Photo } from "@/lib/photos";
-import { BadgeCheck, Clock, Eye, RotateCcw, ShieldCheck, XCircle, Loader2 } from "lucide-react";
+import { BadgeCheck, Clock, Eye, RotateCcw, ShieldCheck, XCircle, Loader2, Lock, LockOpen } from "lucide-react";
 import type { Outcome } from "@/lib/types";
 
 export function VerifiedBadge({ label = "Verified Identity" }: { label?: string }) {
@@ -19,6 +19,21 @@ export function OwnerBadge() {
       title="The verified owner's name matches the title copy they uploaded. Grid does not confirm titles with the Registry of Deeds."
     >
       <ShieldCheck size={14} aria-hidden /> Owner-Authorized
+    </span>
+  );
+}
+
+/** Listing access: Open (any signed-in user) vs Verified-only (passed ID check). */
+export function AccessBadge({ requiresKyc, unlocked = false }: { requiresKyc: boolean; unlocked?: boolean }) {
+  if (!requiresKyc)
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-white/95 text-ok text-xs font-medium px-2.5 py-1">
+        <LockOpen size={12} aria-hidden /> Open listing
+      </span>
+    );
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full text-xs font-medium px-2.5 py-1 ${unlocked ? "bg-ok-soft text-ok" : "bg-midnight/80 text-white"}`}>
+      {unlocked ? <BadgeCheck size={12} aria-hidden /> : <Lock size={12} aria-hidden />} Verified-only{unlocked ? " · unlocked" : ""}
     </span>
   );
 }
