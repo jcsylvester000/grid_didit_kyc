@@ -320,37 +320,20 @@ export function buildMockDecision(v: VerificationRow, scenario: MockScenario, us
 
 export async function adminSnapshot() {
   const month = `date_trunc('month', now() AT TIME ZONE 'Asia/Manila') AT TIME ZONE 'Asia/Manila'`;
-  const [counts, completed, reused, review, pending, recent, events, log] = await Promise.all([
+  const completedSql = (mode: string) =>
+    `SELECT count(*)::int AS n FROM kyc_verifications WHERE mode = '${mode}' AND created_at >= ${month} AND didit_status IN ('Approved','Declined','In Review','Resubmitted')`;
+  const [counts, completed, completedMock, reused, review, pending, outage] = await Promise.all([
     q<{ outcome: Outcome; n: number }>(`SELECT outcome, count(*)::int AS n FROM kyc_verifications WHERE created_at >= ${month} GROUP BY outcome`),
     // Didit bills a feature when it completes: Approved, Declined or In Review (Readiness Report §3.2). Resubmitted attempts also completed.
-    q1<{ n: number }>(`SELECT count(*)::int AS n FROM kyc_verifications WHERE mode = 'live' AND created_at >= ${month} AND didit_status IN ('Approved','Declined','In Review','Resubmitted')`),
+    q1<{ n: number }>(completedSql("live")),
+    q1<{ n: number }>(completedSql("mock")),
     q1<{ n: number }>(`SELECT count(*)::int AS n FROM kyc_audit_log WHERE action = 'verification.reused' AND at >= ${month}`),
     q<VerificationRow>(`SELECT ${COLS} FROM kyc_verifications WHERE outcome = 'review' ORDER BY updated_at ASC LIMIT 50`),
     q<VerificationRow>(`SELECT ${COLS} FROM kyc_verifications WHERE outcome = 'pending' ORDER BY updated_at ASC LIMIT 50`),
-    q<VerificationRow>(`SELECT ${COLS} FROM kyc_verifications ORDER BY updated_at DESC LIMIT 25`),
-    q<{ event_id: string; webhook_type: string | null; status: string | null; signature_method: string | null; processed: boolean; received_at: string }>(
-      `SELECT event_id, webhook_type, status, signature_method, processed, received_at FROM kyc_webhook_events ORDER BY received_at DESC LIMIT 15`,
-    ),
-    q<{ id: number; at: string; actor: string; action: string; user_id: string | null; detail: Record<string, unknown> }>(
-      `SELECT id, at, actor, action, user_id, detail FROM kyc_audit_log ORDER BY at DESC LIMIT 40`,
-    ),
+    isOutageSimulated(),
   ]);
-  const mockCompleted = await q1<{ n: number }>(
-    `SELECT count(*)::int AS n FROM kyc_verifications WHERE mode = 'mock' AND created_at >= ${month} AND didit_status IN ('Approved','Declined','In Review','Resubmitted')`,
-  );
   const byOutcome = Object.fromEntries(counts.map((c) => [c.outcome, c.n])) as Partial<Record<Outcome, number>>;
-  return {
-    byOutcome,
-    completedLive: completed?.n ?? 0,
-    completedMock: mockCompleted?.n ?? 0,
-    reused: reused?.n ?? 0,
-    review,
-    pending,
-    recent,
-    events,
-    log,
-    outage: await isOutageSimulated(),
-  };
+  return { byOutcome, completedLive: completed?.n ?? 0, completedMock: completedMock?.n ?? 0, reused: reused?.n ?? 0, review, pending, outage };
 }
 
 /** Delete accounts created through Register (demo accounts are kept). */

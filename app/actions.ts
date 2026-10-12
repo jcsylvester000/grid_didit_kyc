@@ -187,7 +187,7 @@ export async function adminDecideAction(form: FormData) {
   if (!v) redirect("/admin");
   await staffDecide(id, action, str(form, "note"));
   revalidatePath("/admin");
-  redirect("/admin#review");
+  redirect("/admin?tab=review");
 }
 
 export async function adminToggleOutageAction(form: FormData) {

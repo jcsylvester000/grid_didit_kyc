@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { getListing, idTypeLabel, isDemoAccount, PRICING } from "@/lib/data";
-import { listUsers } from "@/lib/server/auth";
-import { allDocuments } from "@/lib/server/documents";
 import { STATUS_LABEL } from "@/components/DiditGridLegend";
 import Link from "next/link";
 import { isAdmin } from "@/lib/server/session";
-import { dbConfigured } from "@/lib/server/db";
+import { dbConfigured, q } from "@/lib/server/db";
+import { auditPage, documentsPage, usersPage, verificationsPage, webhooksPage } from "@/lib/server/admin";
+import { AdminTabs, Pager, type TabDef } from "@/components/AdminPaging";
 import { env, isMockMode } from "@/lib/server/env";
 import { adminSnapshot } from "@/lib/server/kyc";
 import { DbMissing, Notice, OutcomeChip } from "@/components/ui";
@@ -19,6 +19,9 @@ export const metadata: Metadata = { title: "Admin" };
 type Props = { searchParams: Promise<Record<string, string | undefined>> };
 
 const fmt = (d: string | null) => (d ? new Date(d).toLocaleString("en-PH", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Manila" }) : "—");
+
+const TAB_KEYS = ["overview", "review", "accounts", "documents", "verifications", "webhooks", "audit"] as const;
+type Tab = (typeof TAB_KEYS)[number];
 
 const REASON: Record<string, string> = {
   didit_in_review: "Didit flagged for review",
@@ -52,8 +55,12 @@ export default async function AdminPage({ searchParams }: Props) {
   }
   if (!dbConfigured()) return <DbMissing />;
 
-  const [s, users, docs] = await Promise.all([adminSnapshot(), listUsers(), allDocuments()]);
-  const names = new Map(users.map((u) => [u.id, u.name]));
+  const tab: Tab = (TAB_KEYS as readonly string[]).includes(sp.tab ?? "") ? (sp.tab as Tab) : "overview";
+  const pageNo = Number(sp.page) || 1;
+  const s = await adminSnapshot();
+  const queueIds = [...s.review, ...s.pending].map((v) => v.user_id);
+  const nameRows = queueIds.length ? await q<{ id: string; name: string }>(`SELECT id, display_name AS name FROM kyc_users WHERE id = ANY($1)`, [queueIds]) : [];
+  const names = new Map(nameRows.map((u) => [u.id, u.name]));
   const who = (id: string | null) => (id ? names.get(id) ?? "Deleted account" : "—");
   const mock = isMockMode();
   const used = mock ? s.completedMock : s.completedLive;
@@ -67,9 +74,27 @@ export default async function AdminPage({ searchParams }: Props) {
     { label: "Retry", outcome: "retry" },
     { label: "Declined", outcome: "declined" },
   ];
+  const tabs: TabDef[] = [
+    { key: "overview", label: "Overview" },
+    { key: "review", label: "Review queue", count: s.review.length },
+    { key: "accounts", label: "Accounts" },
+    { key: "documents", label: "Documents" },
+    { key: "verifications", label: "Verifications" },
+    { key: "webhooks", label: "Webhooks" },
+    { key: "audit", label: "Audit log" },
+  ];
+
+  // Each tab loads only its own table (30 rows per page).
+  const [users, docs, verifs, hooks, audit] = await Promise.all([
+    tab === "accounts" ? usersPage(pageNo) : null,
+    tab === "documents" ? documentsPage(pageNo) : null,
+    tab === "verifications" ? verificationsPage(pageNo) : null,
+    tab === "webhooks" ? webhooksPage(pageNo) : null,
+    tab === "audit" ? auditPage(pageNo) : null,
+  ]);
 
   return (
-    <div className="page space-y-8">
+    <div className="page space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="eyebrow">Staff console</p>
@@ -80,6 +105,11 @@ export default async function AdminPage({ searchParams }: Props) {
       {sp.reset && <Notice tone="ok">Demo data reset. Paolo&apos;s sample verification was re-created.</Notice>}
       {sp.accounts && <Notice tone="ok">Registered test accounts deleted. Demo accounts were kept.</Notice>}
 
+
+      <AdminTabs tabs={tabs} active={tab} />
+
+      {tab === "overview" && (
+        <div className="space-y-8">
       {/* Configuration */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="card p-5 space-y-2 text-sm">
@@ -149,6 +179,34 @@ export default async function AdminPage({ searchParams }: Props) {
         ))}
       </section>
 
+          {s.review.length > 0 && (
+            <Notice tone="info">{s.review.length} verification{s.review.length === 1 ? "" : "s"} waiting for manual review. <Link className="underline font-medium" href="/admin?tab=review">Open the review queue</Link></Notice>
+          )}
+      {/* Pending */}
+      <section className="space-y-3">
+        <h2 className="text-xl text-nile">Pending: Didit was unavailable ({s.pending.length})</h2>
+        {s.pending.length === 0 ? (
+          <p className="text-sm text-muted">Nothing pending.</p>
+        ) : (
+          <div className="card overflow-x-auto">
+            <table className="table-tight w-full">
+              <thead><tr><th>User</th><th>Reason</th><th>Listing</th><th>Since</th></tr></thead>
+              <tbody>
+                {s.pending.map((v) => (
+                  <tr key={v.id}><td>{who(v.user_id)}</td><td>{REASON[v.failure_reason ?? ""] ?? v.failure_reason}</td><td>{getListing(v.listing_id)?.title ?? "—"}</td><td>{fmt(v.updated_at)}</td></tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="text-xs text-muted px-3 py-2">Users resume from the listing or their account page. Production: notify them by SMS/email when Didit is back.</p>
+          </div>
+        )}
+      </section>
+
+        </div>
+      )}
+
+      {tab === "review" && (
+        <div className="space-y-3">
       {/* Review queue */}
       <section id="review" className="space-y-3">
         <h2 className="text-xl text-nile">Manual review queue ({s.review.length})</h2>
@@ -189,127 +247,140 @@ export default async function AdminPage({ searchParams }: Props) {
         ))}
       </section>
 
-      {/* Pending */}
-      <section className="space-y-3">
-        <h2 className="text-xl text-nile">Pending: Didit was unavailable ({s.pending.length})</h2>
-        {s.pending.length === 0 ? (
-          <p className="text-sm text-muted">Nothing pending.</p>
-        ) : (
+        </div>
+      )}
+
+      {tab === "accounts" && users && (
+        <section className="space-y-3" aria-labelledby="users-h">
+          <h2 id="users-h" className="text-xl text-nile">Accounts</h2>
+          <Pager tab="accounts" {...users} />
           <div className="card overflow-x-auto">
             <table className="table-tight w-full">
-              <thead><tr><th>User</th><th>Reason</th><th>Listing</th><th>Since</th></tr></thead>
+              <thead><tr><th>Name</th><th>Email</th><th>Type</th><th>Role</th><th>Identity</th><th>Viewings</th><th>Documents</th><th>Joined</th><th>Last sign-in</th></tr></thead>
               <tbody>
-                {s.pending.map((v) => (
-                  <tr key={v.id}><td>{who(v.user_id)}</td><td>{REASON[v.failure_reason ?? ""] ?? v.failure_reason}</td><td>{getListing(v.listing_id)?.title ?? "—"}</td><td>{fmt(v.updated_at)}</td></tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="text-xs text-muted px-3 py-2">Users resume from the listing or their account page. Production: notify them by SMS/email when Didit is back.</p>
-          </div>
-        )}
-      </section>
-
-      {/* Users */}
-      <section className="space-y-3" aria-labelledby="users-h">
-        <h2 id="users-h" className="text-xl text-nile">Accounts ({users.length})</h2>
-        <div className="card overflow-x-auto">
-          <table className="table-tight w-full">
-            <thead><tr><th>Name</th><th>Email</th><th>Type</th><th>Identity</th><th>Viewings</th><th>Joined</th><th>Last sign-in</th></tr></thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id}>
-                  <td className="font-medium">{u.name}</td>
-                  <td>{u.email}</td>
-                  <td>{isDemoAccount(u.id) ? "Demo" : "Registered"}</td>
-                  <td>{u.kyc_outcome ? <OutcomeChip outcome={u.kyc_outcome as Outcome} /> : <span className="text-muted">Not started</span>}</td>
-                  <td className="tabular-nums">{u.bookings}</td>
-                  <td className="whitespace-nowrap">{fmt(u.created_at)}</td>
-                  <td className="whitespace-nowrap">{fmt(u.last_login_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Documents */}
-      <section className="space-y-3" aria-labelledby="docs-h">
-        <h2 id="docs-h" className="text-xl text-nile">Document transactions ({docs.length})</h2>
-        <div className="card overflow-x-auto">
-          <table className="table-tight w-full">
-            <thead><tr><th>Updated</th><th>Document</th><th>Property</th><th>Owner</th><th>Broker</th><th>Status</th><th>Title check</th></tr></thead>
-            <tbody>
-              {docs.length === 0 && <tr><td colSpan={7} className="text-muted">No documents yet.</td></tr>}
-              {docs.map((d) => (
-                <tr key={d.id}>
-                  <td className="whitespace-nowrap">{fmt(d.updated_at)}</td>
-                  <td><Link className="underline" href={`/documents/${d.id}`}>ATS {d.id.slice(0, 8).toUpperCase()}</Link></td>
-                  <td>{getListing(d.listing_id)?.title ?? d.listing_id}</td>
-                  <td>{d.owner_name}</td>
-                  <td>{d.broker_name}</td>
-                  <td><span className={`rounded-full text-xs px-2 py-0.5 ${STATUS_LABEL[d.status].cls}`}>{STATUS_LABEL[d.status].label}</span></td>
-                  <td>{d.title_check ? `${d.title_check.status}${d.title_check.mode === "simulated" ? " (sim)" : ""}` : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Recent */}
-      <section className="space-y-3">
-        <h2 className="text-xl text-nile">Recent verifications</h2>
-        <div className="card overflow-x-auto">
-          <table className="table-tight w-full">
-            <thead><tr><th>Updated</th><th>User</th><th>Outcome</th><th>Didit status</th><th>ID type</th><th>Mode</th><th>Reviewed</th></tr></thead>
-            <tbody>
-              {s.recent.map((v) => (
-                <tr key={v.id}>
-                  <td className="whitespace-nowrap">{fmt(v.updated_at)}</td>
-                  <td>{who(v.user_id)}</td>
-                  <td><OutcomeChip outcome={v.outcome} /></td>
-                  <td>{v.didit_status ?? "—"}</td>
-                  <td>{idTypeLabel(v.id_type_chosen)}</td>
-                  <td>{v.mode}</td>
-                  <td>{v.reviewed_by ? `${v.reviewed_by}: ${v.review_note ?? ""}` : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 [&>section]:min-w-0">
-        <section className="space-y-3">
-          <h2 className="text-xl text-nile">Webhook events</h2>
-          <div className="card overflow-x-auto">
-            <table className="table-tight w-full">
-              <thead><tr><th>Received</th><th>Type</th><th>Status</th><th>Signature</th><th>Done</th></tr></thead>
-              <tbody>
-                {s.events.length === 0 && <tr><td colSpan={5} className="text-muted">No webhooks yet{mock ? " (mock mode does not use webhooks)" : ""}.</td></tr>}
-                {s.events.map((e) => (
-                  <tr key={e.event_id}><td className="whitespace-nowrap">{fmt(e.received_at)}</td><td>{e.webhook_type ?? "—"}</td><td>{e.status ?? "—"}</td><td>{e.signature_method}</td><td>{e.processed ? "✓" : "…"}</td></tr>
+                {users.rows.map((u) => (
+                  <tr key={u.id}>
+                    <td className="font-medium">{u.name}</td>
+                    <td>{u.email}</td>
+                    <td>{isDemoAccount(u.id) ? "Demo" : "Registered"}</td>
+                    <td className="capitalize">{u.role}</td>
+                    <td>{u.kyc_outcome ? <OutcomeChip outcome={u.kyc_outcome as Outcome} /> : <span className="text-muted">Not started</span>}</td>
+                    <td className="tabular-nums">{u.bookings}</td>
+                    <td className="tabular-nums">{u.documents}</td>
+                    <td className="whitespace-nowrap">{fmt(u.created_at)}</td>
+                    <td className="whitespace-nowrap">{fmt(u.last_login_at)}</td>
+                  </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          <Pager tab="accounts" {...users} />
         </section>
-        <section className="space-y-3">
-          <h2 className="text-xl text-nile">Audit log</h2>
-          <div className="card overflow-x-auto max-h-[28rem]">
+      )}
+
+      {tab === "documents" && docs && (
+        <section className="space-y-3" aria-labelledby="docs-h">
+          <h2 id="docs-h" className="text-xl text-nile">Document transactions</h2>
+          <Pager tab="documents" {...docs} />
+          <div className="card overflow-x-auto">
+            <table className="table-tight w-full">
+              <thead><tr><th>Updated</th><th>Document</th><th>Property</th><th>Owner</th><th>Broker</th><th>Status</th><th>Title check</th></tr></thead>
+              <tbody>
+                {docs.rows.length === 0 && <tr><td colSpan={7} className="text-muted">No documents yet.</td></tr>}
+                {docs.rows.map((d) => (
+                  <tr key={d.id}>
+                    <td className="whitespace-nowrap">{fmt(d.updated_at)}</td>
+                    <td><Link className="underline" href={`/documents/${d.id}`}>ATS {d.id.slice(0, 8).toUpperCase()}</Link></td>
+                    <td>{getListing(d.listing_id)?.title ?? d.listing_id}</td>
+                    <td>{d.owner_name}</td>
+                    <td>{d.broker_name}</td>
+                    <td><span className={`rounded-full text-xs px-2 py-0.5 ${STATUS_LABEL[d.status].cls}`}>{STATUS_LABEL[d.status].label}</span></td>
+                    <td>{d.title_check ? `${d.title_check.status}${d.title_check.mode === "simulated" ? " (sim)" : ""}` : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pager tab="documents" {...docs} />
+        </section>
+      )}
+
+      {tab === "verifications" && verifs && (
+        <section className="space-y-3" aria-labelledby="ver-h">
+          <h2 id="ver-h" className="text-xl text-nile">Verifications</h2>
+          <Pager tab="verifications" {...verifs} />
+          <div className="card overflow-x-auto">
+            <table className="table-tight w-full">
+              <thead><tr><th>Updated</th><th>User</th><th>Outcome</th><th>Didit status</th><th>Session</th><th>ID type</th><th>Mode</th><th>Reviewed</th></tr></thead>
+              <tbody>
+                {verifs.rows.length === 0 && <tr><td colSpan={8} className="text-muted">No verifications yet.</td></tr>}
+                {verifs.rows.map((v) => (
+                  <tr key={v.id}>
+                    <td className="whitespace-nowrap">{fmt(v.updated_at)}</td>
+                    <td>{v.user_name ?? "Deleted account"}</td>
+                    <td><OutcomeChip outcome={v.outcome} /></td>
+                    <td>{v.didit_status ?? "—"}</td>
+                    <td>{v.didit_session_number ? `#${v.didit_session_number}` : "—"}</td>
+                    <td>{idTypeLabel(v.id_type_chosen)}</td>
+                    <td>{v.mode}</td>
+                    <td>{v.reviewed_by ? `${v.reviewed_by}: ${v.review_note ?? ""}` : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pager tab="verifications" {...verifs} />
+        </section>
+      )}
+
+      {tab === "webhooks" && hooks && (
+        <section className="space-y-3" aria-labelledby="wh-h">
+          <h2 id="wh-h" className="text-xl text-nile">Webhook events</h2>
+          <Pager tab="webhooks" {...hooks} />
+          <div className="card overflow-x-auto">
+            <table className="table-tight w-full">
+              <thead><tr><th>Received</th><th>Event</th><th>Type</th><th>Status</th><th>Signature</th><th>Processed</th></tr></thead>
+              <tbody>
+                {hooks.rows.length === 0 && <tr><td colSpan={6} className="text-muted">No webhooks yet{mock ? " (mock mode does not use webhooks)" : ""}.</td></tr>}
+                {hooks.rows.map((e) => (
+                  <tr key={e.event_id}>
+                    <td className="whitespace-nowrap">{fmt(e.received_at)}</td>
+                    <td className="font-mono text-xs">{e.event_id.slice(0, 18)}</td>
+                    <td>{e.webhook_type ?? "—"}</td>
+                    <td>{e.status ?? "—"}</td>
+                    <td>{e.signature_method}</td>
+                    <td>{e.processed ? "✓" : "…"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pager tab="webhooks" {...hooks} />
+        </section>
+      )}
+
+      {tab === "audit" && audit && (
+        <section className="space-y-3" aria-labelledby="audit-h">
+          <div>
+            <h2 id="audit-h" className="text-xl text-nile">Audit log</h2>
+            <p className="text-sm text-muted">Append-only. Records actions and status codes only, never ID images, ID numbers or contact details.</p>
+          </div>
+          <Pager tab="audit" {...audit} />
+          <div className="card overflow-x-auto">
             <table className="table-tight w-full">
               <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Detail</th></tr></thead>
               <tbody>
-                {s.log.map((l) => (
+                {audit.rows.length === 0 && <tr><td colSpan={4} className="text-muted">No entries yet.</td></tr>}
+                {audit.rows.map((l) => (
                   <tr key={l.id}>
                     <td className="whitespace-nowrap">{fmt(l.at)}</td>
-                    <td className="whitespace-nowrap">{l.actor.startsWith("user:") ? who(l.actor.slice(5)) : l.actor}</td>
+                    <td className="whitespace-nowrap">{l.actor.startsWith("user:") ? l.actor_name ?? "Deleted account" : l.actor}</td>
                     <td><code className="text-xs">{l.action}</code></td>
-                    <td className="text-xs text-muted">
+                    <td className="text-xs text-muted min-w-[16rem]">
                       {Object.entries(l.detail ?? {})
                         .filter(([, v]) => v !== null && v !== "")
                         .map(([k, v]) => (
-                          <span key={k} className="inline-block mr-2">
+                          <span key={k} className="inline-block mr-3">
                             {k}: <b className="font-medium text-midnight">{String(v)}</b>
                           </span>
                         ))}
@@ -319,8 +390,9 @@ export default async function AdminPage({ searchParams }: Props) {
               </tbody>
             </table>
           </div>
+          <Pager tab="audit" {...audit} />
         </section>
-      </div>
+      )}
     </div>
   );
 }
