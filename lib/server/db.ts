@@ -1,0 +1,60 @@
+import "server-only";
+import { neon, neonConfig, type NeonQueryFunction } from "@neondatabase/serverless";
+import { env } from "./env";
+import { SCHEMA_STATEMENTS } from "./schema";
+import { DEMO_USERS } from "@/lib/data";
+
+let client: NeonQueryFunction<false, false> | null = null;
+let ready: Promise<void> | null = null;
+
+function getClient() {
+  const url = env.databaseUrl();
+  if (!url) throw new Error("DATABASE_URL is not set. Add it to .env.local (local) or Netlify env vars.");
+  if (!client) {
+    // Local test hook only: point the driver at a Neon-compatible HTTP endpoint (never set in production).
+    if (process.env.NEON_FETCH_ENDPOINT) neonConfig.fetchEndpoint = process.env.NEON_FETCH_ENDPOINT;
+    client = neon(url);
+  }
+  return client;
+}
+
+async function migrate() {
+  const sql = getClient();
+  for (const stmt of SCHEMA_STATEMENTS) await sql.query(stmt);
+  for (const u of DEMO_USERS) {
+    await sql.query(
+      `INSERT INTO kyc_users (id, display_name, email, role) VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO NOTHING`,
+      [u.id, u.name, u.email, u.role],
+    );
+  }
+  await seedReturningTenant();
+}
+
+/** Paolo is the "returning tenant": seed one passed verification so reuse can be demoed. */
+export async function seedReturningTenant() {
+  const sql = getClient();
+  await sql.query(
+    `INSERT INTO kyc_verifications
+       (user_id, trigger_action, listing_id, id_type_chosen, mode, didit_status, outcome,
+        verified_name, date_of_birth, document_type, document_expiry, issuing_state, decided_at, created_at)
+     SELECT 'demo-tenant-paolo', 'book_viewing', 'rockwell-2br', 'passport', 'seed', 'Approved', 'verified',
+            'PAOLO REYES', '1991-04-12', 'Passport', (now() + interval '3 years')::date, 'PHL',
+            now() - interval '30 days', now() - interval '30 days'
+     WHERE NOT EXISTS (SELECT 1 FROM kyc_verifications WHERE user_id = 'demo-tenant-paolo')`,
+  );
+}
+
+/** Run a parameterised query. Schema is created once per server instance. */
+export async function q<T = Record<string, unknown>>(text: string, params: unknown[] = []): Promise<T[]> {
+  const sql = getClient();
+  if (!ready) ready = migrate().catch((e) => { ready = null; throw e; });
+  await ready;
+  return (await sql.query(text, params)) as T[];
+}
+
+export async function q1<T = Record<string, unknown>>(text: string, params: unknown[] = []): Promise<T | null> {
+  const rows = await q<T>(text, params);
+  return rows[0] ?? null;
+}
+
+export const dbConfigured = () => Boolean(env.databaseUrl());

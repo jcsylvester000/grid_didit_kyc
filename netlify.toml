@@ -1,0 +1,28 @@
+# GRID Verified (Didit KYC prototype) — Netlify build config (agency skill W20).
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Secrets are NOT stored here. Set them in Netlify -> Site configuration -> Environment variables:
+#   DATABASE_URL          Neon pooled connection string
+#   DIDIT_API_KEY         Didit application API key (sandbox first)
+#   DIDIT_WORKFLOW_ID     Didit workflow UUID (ID + liveness + face match + IP)
+#   DIDIT_WEBHOOK_SECRET  Didit webhook "secret shared key"
+#   APP_URL               Site URL, no trailing slash (e.g. https://grid-verified.netlify.app)
+#   ADMIN_ACCESS_CODE     Code for /admin
+#   SESSION_SECRET        Long random string (signs cookies)
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Robots-Tag = "noindex, nofollow"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
